@@ -1,0 +1,30 @@
+{
+  "name": "@captura-ia/web",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:ffmpeg": "node scripts/copy-ffmpeg.mjs",
+    "dev": "npm run prepare:ffmpeg && vite",
+    "build": "npm run prepare:ffmpeg && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint src vite.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
+    "@huggingface/transformers": "4.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.1.1",
+    "eslint": "10.7.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

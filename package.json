@@ -1,0 +1,22 @@
+{
+  "name": "captura-ia-studio",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Grabador de pantalla y audio con exportación MP4/MP3 y transcripción local gratuita con Whisper Large v3.",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @captura-ia/web",
+    "build": "npm run build --workspace @captura-ia/web",
+    "check": "npm run typecheck --workspaces --if-present && npm run lint --workspaces --if-present && npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}
