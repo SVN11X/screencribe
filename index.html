@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#101828" />
+    <meta
+      name="description"
+      content="Graba pantalla y audio, genera MP4 y MP3 y transcribe con Whisper Large v3 Turbo desde un servidor, sin instalar modelos en el dispositivo."
+    />
+    <title>Screencribe</title>
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Saltar al contenido</a>
+
+    <header class="topbar">
+      <div class="brand" aria-label="Screencribe">
+        <img src="./icons/icon.svg" alt="" width="42" height="42" />
+        <div>
+          <strong>Screencribe</strong>
+          <span>Grabación y transcripción sin instalar modelos</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="apiBadge" class="badge badge-neutral">Servidor sin configurar</span>
+        <button id="openSettings" class="button button-secondary button-small" type="button">
+          Configurar servidor
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="page-shell">
+      <section class="hero panel">
+        <div>
+          <p class="eyebrow">GRABADOR WEB</p>
+          <h1>Graba, convierte y transcribe desde cualquier computador compatible</h1>
+          <p class="hero-copy">
+            La grabación ocurre en el navegador. La conversión a MP4/MP3 y la transcripción con
+            Whisper Large v3 Turbo se ejecutan en tu servidor, para evitar descargar modelos de IA
+            en cada equipo.
+          </p>
+        </div>
+        <div class="privacy-note">
+          <strong>Privacidad</strong>
+          <span>Los archivos se eliminan automáticamente del servidor después del plazo configurado.</span>
+        </div>
+      </section>
+
+      <section class="workspace-grid" aria-label="Área de trabajo">
+        <article class="panel card">
+          <div class="card-heading">
+            <div>
+              <p class="step">PASO 1</p>
+              <h2>Crear o cargar una grabación</h2>
+            </div>
+            <span id="recordingTimer" class="timer" aria-live="polite">00:00:00</span>
+          </div>
+
+          <div class="option-grid">
+            <label class="toggle-row">
+              <input id="includeMic" type="checkbox" checked />
+              <span>
+                <strong>Micrófono</strong>
+                <small>Incluye tu voz en la grabación.</small>
+              </span>
+            </label>
+            <label class="toggle-row">
+              <input id="includeSystemAudio" type="checkbox" checked />
+              <span>
+                <strong>Audio compartido</strong>
+                <small>Depende del navegador y de lo que selecciones al compartir.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button id="startRecording" class="button button-primary" type="button">
+              Iniciar grabación
+            </button>
+            <button id="pauseRecording" class="button button-secondary" type="button" disabled>
+              Pausar
+            </button>
+            <button id="stopRecording" class="button button-danger" type="button" disabled>
+              Detener
+            </button>
+          </div>
+
+          <div class="divider"><span>o</span></div>
+
+          <label class="file-drop" for="fileInput">
+            <input
+              id="fileInput"
+              type="file"
+              accept="video/*,audio/*,.webm,.mp4,.m4a,.mp3,.wav,.ogg,.mov,.mkv"
+            />
+            <strong>Cargar una grabación existente</strong>
+            <span>Video o audio. El límite depende del servidor configurado.</span>
+          </label>
+
+          <div id="sourceInfo" class="source-info hidden" aria-live="polite">
+            <div>
+              <span>Archivo seleccionado</span>
+              <strong id="sourceName"></strong>
+            </div>
+            <div>
+              <span>Tamaño</span>
+              <strong id="sourceSize"></strong>
+            </div>
+            <button id="clearSource" class="button button-ghost button-small" type="button">
+              Quitar
+            </button>
+          </div>
+        </article>
+
+        <article class="panel card preview-card">
+          <div class="card-heading">
+            <div>
+              <p class="step">VISTA PREVIA</p>
+              <h2>Revisa el archivo</h2>
+            </div>
+          </div>
+          <div id="previewPlaceholder" class="preview-placeholder">
+            <span>La vista previa aparecerá aquí.</span>
+          </div>
+          <video id="videoPreview" class="media-preview hidden" controls playsinline></video>
+          <audio id="audioPreview" class="audio-preview hidden" controls></audio>
+          <div class="button-row compact">
+            <button id="downloadOriginal" class="button button-secondary" type="button" disabled>
+              Descargar original
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel card processing-card">
+        <div class="card-heading">
+          <div>
+            <p class="step">PASO 2</p>
+            <h2>Procesar en el servidor</h2>
+          </div>
+        </div>
+
+        <div class="processing-grid">
+          <fieldset>
+            <legend>Resultados</legend>
+            <label class="check-row"><input id="wantTranscript" type="checkbox" checked /> Transcripción</label>
+            <label class="check-row"><input id="wantMp4" type="checkbox" checked /> Video MP4</label>
+            <label class="check-row"><input id="wantMp3" type="checkbox" checked /> Audio MP3</label>
+          </fieldset>
+
+          <div class="form-field">
+            <label for="language">Idioma</label>
+            <select id="language">
+              <option value="">Detectar automáticamente</option>
+              <option value="es" selected>Español</option>
+              <option value="en">Inglés</option>
+              <option value="pt">Portugués</option>
+              <option value="fr">Francés</option>
+              <option value="de">Alemán</option>
+              <option value="it">Italiano</option>
+            </select>
+          </div>
+
+          <div class="form-field wide">
+            <label for="prompt">Palabras difíciles o nombres propios <span>(opcional)</span></label>
+            <textarea
+              id="prompt"
+              rows="3"
+              maxlength="1000"
+              placeholder="Ejemplo: Screencribe, Valdivia, Peñaflor, nombres de estudiantes, conceptos técnicos…"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="processFile" class="button button-primary" type="button" disabled>
+            Procesar archivo
+          </button>
+          <button id="cancelJob" class="button button-secondary hidden" type="button">
+            Cancelar seguimiento
+          </button>
+        </div>
+
+        <div id="progressBox" class="progress-box hidden" aria-live="polite">
+          <div class="progress-heading">
+            <strong id="progressTitle">Preparando…</strong>
+            <span id="progressPercent">0%</span>
+          </div>
+          <progress id="progressBar" max="100" value="0"></progress>
+          <p id="progressMessage">Esperando al servidor.</p>
+        </div>
+
+        <div id="errorBox" class="alert alert-error hidden" role="alert"></div>
+      </section>
+
+      <section id="resultsSection" class="panel card hidden">
+        <div class="card-heading">
+          <div>
+            <p class="step">PASO 3</p>
+            <h2>Descargar resultados</h2>
+          </div>
+          <span id="detectedLanguage" class="badge badge-neutral"></span>
+        </div>
+
+        <div id="downloadGrid" class="download-grid"></div>
+
+        <div id="transcriptPanel" class="transcript-panel hidden">
+          <div class="transcript-toolbar">
+            <div>
+              <h3>Transcripción editable</h3>
+              <p>Corrige el texto antes de exportarlo.</p>
+            </div>
+            <div class="button-row compact">
+              <button id="exportTxt" class="button button-secondary button-small" type="button">TXT</button>
+              <button id="exportSrt" class="button button-secondary button-small" type="button">SRT</button>
+              <button id="exportVtt" class="button button-secondary button-small" type="button">VTT</button>
+              <button id="exportJson" class="button button-secondary button-small" type="button">JSON</button>
+            </div>
+          </div>
+          <textarea id="transcriptEditor" rows="16" spellcheck="true"></textarea>
+        </div>
+      </section>
+
+      <section class="panel compatibility-panel">
+        <h2>Compatibilidad real</h2>
+        <div class="compatibility-grid">
+          <div>
+            <strong>Sin instalaciones</strong>
+            <span>Quien usa la página no instala Node.js, FFmpeg ni modelos de IA.</span>
+          </div>
+          <div>
+            <strong>Permisos obligatorios</strong>
+            <span>El navegador siempre pedirá autorización para compartir pantalla y micrófono.</span>
+          </div>
+          <div>
+            <strong>Restricciones institucionales</strong>
+            <span>Algunas redes pueden bloquear micrófono, captura de pantalla o subida de archivos.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="settingsDialog">
+      <form method="dialog" class="settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="step">CONFIGURACIÓN</p>
+            <h2>Servidor de procesamiento</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
+        </div>
+        <p>
+          Ingresa la dirección pública del backend desplegado, por ejemplo
+          <code>https://usuario-screencribe-api.hf.space</code>.
+        </p>
+        <div class="form-field">
+          <label for="apiUrl">URL del servidor</label>
+          <input id="apiUrl" type="url" placeholder="https://…hf.space" autocomplete="url" />
+        </div>
+        <div class="dialog-actions">
+          <button id="testApi" class="button button-secondary" type="button">Probar conexión</button>
+          <button id="saveSettings" class="button button-primary" value="default">Guardar</button>
+        </div>
+        <p id="settingsStatus" class="settings-status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <footer>
+      <span>Screencribe · Código abierto</span>
+      <span>Usa solo grabaciones para las que tengas autorización.</span>
+    </footer>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

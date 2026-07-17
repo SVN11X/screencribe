@@ -1,9 +1,12 @@
-name: CI
+name: Validate repository
 
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -13,8 +16,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run format:check
-      - run: npm run check
-      - run: npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check JavaScript syntax
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Check Python syntax
+        run: python -m compileall -q backend/app
+      - name: Check required files
+        run: test -f index.html && test -f backend/Dockerfile && test -f backend/app/main.py

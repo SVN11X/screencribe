@@ -1,10 +1,12 @@
 # Avisos de terceros
 
-Este proyecto utiliza, entre otras dependencias:
+El backend utiliza proyectos de código abierto, entre ellos:
 
-- Transformers.js, de Hugging Face.
-- ONNX Runtime Web, distribuido como dependencia de Transformers.js.
-- Whisper Large v3 convertido a ONNX por ONNX Community.
-- ffmpeg.wasm y FFmpeg.
+- FastAPI
+- Uvicorn
+- FFmpeg
+- faster-whisper
+- CTranslate2
+- Whisper Large v3 Turbo
 
-Cada componente conserva su licencia y condiciones originales. Este archivo no reemplaza los avisos incluidos en los paquetes instalados ni la ficha del modelo.
+Consulta las licencias de cada proyecto y del modelo antes de redistribuir una imagen Docker modificada.

@@ -1,102 +1,189 @@
-# screencribe
+# Screencribe
 
-Aplicación web estática para grabar pantalla, audio del sistema y micrófono; descargar WebM, convertir localmente a MP4 o MP3 y crear transcripciones gratuitas con **Whisper Large v3**, sin API key y sin subir el audio a un servidor de transcripción.
+Aplicación web para grabar pantalla y audio, convertir a **MP4/MP3** y generar transcripciones con **Whisper Large v3 Turbo**, sin instalar Node.js, FFmpeg, WebGPU ni modelos de IA en los computadores que la utilizan.
 
-## Funcionalidades
+## La solución incluida
 
-- Captura de pantalla, ventana o pestaña.
-- Micrófono opcional con cancelación de eco y reducción de ruido.
-- Mezcla del micrófono con el audio compartido.
-- Pausa, reanudación, temporizador y vista previa.
-- Carga de archivos de audio o video existentes.
-- Descarga del archivo original.
-- Conversión local a MP4 H.264/AAC y MP3 mediante ffmpeg.wasm.
-- Transcripción local con `onnx-community/whisper-large-v3-ONNX`.
-- Ejecución WebGPU en un Web Worker para no bloquear la interfaz.
-- Modelo cuantizado en 4 bits para reducir descarga y uso de memoria.
-- Procesamiento del audio en mono a 16 kHz y bloques con solapamiento.
-- Idioma explícito o detección automática.
-- Exportación de transcripción en TXT, Markdown, JSON, SRT y VTT.
-- Interfaz adaptable, accesible y sin base de datos.
+Screencribe está dividida en dos partes:
 
-## Lo más importante
+1. **Página estática en GitHub Pages**: captura pantalla, audio compartido y micrófono.
+2. **Servidor Docker**: recibe temporalmente la grabación, genera MP4/MP3 y transcribe con Whisper Large v3 Turbo.
 
-La transcripción **no necesita OpenAI, Cloudflare, Supabase ni otra API**. El navegador descarga los archivos del modelo desde Hugging Face la primera vez y normalmente los reutiliza desde su caché en las siguientes sesiones.
+El repositorio no usa Vite ni npm para publicar la página. GitHub Pages copia directamente los archivos estáticos, evitando los problemas anteriores con `node_modules`, Google Drive y `package-lock.json`.
 
-Whisper Large v3 es exigente. La aplicación requiere WebGPU para la transcripción y está pensada principalmente para Chrome o Edge de escritorio con una GPU moderna. Se recomiendan 16 GB de RAM o más y espacio libre suficiente para la caché del navegador.
+## Funciones
 
-## Arquitectura
+- Grabación de pantalla, ventana o pestaña.
+- Micrófono opcional.
+- Audio de pestaña o sistema cuando el navegador lo permite.
+- Mezcla de micrófono y audio compartido.
+- Pausar, reanudar y detener.
+- Cargar grabaciones existentes.
+- Descargar el archivo original.
+- Conversión en servidor a MP4 H.264/AAC.
+- Extracción en servidor a MP3.
+- Transcripción con Whisper Large v3 Turbo.
+- Detección o selección del idioma.
+- Vocabulario de apoyo para nombres propios y tecnicismos.
+- Exportación TXT, JSON, SRT y VTT.
+- Eliminación temporal de archivos.
+- Diseño adaptable y modo oscuro automático.
+
+## Requisitos para quien usa la página
+
+Solo necesita:
+
+- Un navegador actualizado.
+- Conexión al servidor de procesamiento.
+- Permiso para compartir pantalla y/o micrófono.
+
+No necesita instalar nada ni proporcionar una API key.
+
+## 1. Publicar la página en GitHub Pages
+
+Sube el contenido de este repositorio a `https://github.com/SVN11X/screencribe` y ejecuta:
+
+```powershell
+git add .
+git commit -m "Nueva arquitectura sin descargas locales"
+git push origin main
+```
+
+Luego entra en:
+
+`GitHub → Settings → Pages → Source → GitHub Actions`
+
+El workflow `.github/workflows/pages.yml` publicará únicamente:
+
+- `index.html`
+- `404.html`
+- `assets/`
+- `src/`
+- `icons/`
+
+La dirección será:
+
+`https://svn11x.github.io/screencribe/`
+
+No debes ejecutar `npm install` ni `npm run build`.
+
+## 2. Crear el backend gratuito en Hugging Face Spaces
+
+### Crear la cuenta y el Space
+
+1. Crea una cuenta en Hugging Face.
+2. Crea un Space nuevo llamado, por ejemplo, `screencribe-api`.
+3. Selecciona **Docker** como SDK.
+4. Déjalo público para que GitHub Pages pueda conectarse.
+
+### Método recomendado: desplegar desde GitHub Actions
+
+En Hugging Face crea un token con permiso de escritura.
+
+En GitHub abre:
+
+`Settings → Secrets and variables → Actions`
+
+Crea:
+
+- **Secret:** `HF_TOKEN` con el token de Hugging Face.
+- **Variable:** `HF_SPACE_ID` con un valor como `SVN11X/screencribe-api`.
+
+Luego entra en:
+
+`Actions → Deploy backend to Hugging Face → Run workflow`
+
+El workflow subirá solamente la carpeta `backend/` al Space.
+
+### Configurar el origen permitido
+
+En el Space abre `Settings → Variables and secrets` y agrega:
 
 ```text
-Pantalla + micrófono
-        ↓
-MediaRecorder → WebM original
-        ↓
-ffmpeg.wasm → MP4 / MP3
-        ↓
-Web Audio API → mono Float32, 16 kHz
-        ↓
-Web Worker + Transformers.js + WebGPU
-        ↓
-Whisper Large v3 cuantizado
-        ↓
-TXT / Markdown / JSON / SRT / VTT
+ALLOWED_ORIGINS=https://svn11x.github.io
 ```
 
-Todo el proyecto puede publicarse en GitHub Pages porque no necesita backend.
+También puedes configurar:
 
-## Requisitos de desarrollo
+```text
+MAX_UPLOAD_MB=300
+JOB_TTL_SECONDS=7200
+MAX_JOBS_PER_HOUR=5
+WHISPER_CPU_THREADS=2
+WHISPER_COMPUTE_TYPE=int8
+```
 
-- Node.js 22 o superior.
-- npm.
-- Chrome o Edge actualizado para probar WebGPU y captura de pantalla.
-- HTTPS para la versión publicada.
+Espera a que el Space indique **Running**. Su URL tendrá una forma parecida a:
 
-## Ejecutar localmente
+```text
+https://svn11x-screencribe-api.hf.space
+```
+
+Usa la URL exacta que muestre Hugging Face.
+
+## 3. Conectar la página con el servidor
+
+1. Abre `https://svn11x.github.io/screencribe/`.
+2. Presiona **Configurar servidor**.
+3. Pega la URL terminada en `.hf.space`.
+4. Presiona **Probar conexión**.
+5. Guarda la configuración.
+
+La URL queda guardada en el navegador. No es una contraseña ni una API key.
+
+## Funcionamiento de los archivos
+
+1. El navegador crea una grabación usando `MediaRecorder`.
+2. El usuario elige los resultados que necesita.
+3. La grabación se carga al backend.
+4. FFmpeg genera MP4 y MP3.
+5. Whisper Large v3 Turbo genera la transcripción.
+6. El navegador descarga los resultados.
+7. El backend elimina los archivos al expirar el trabajo.
+
+## Compatibilidad
+
+Chrome y Edge en computador suelen ofrecer la mayor compatibilidad con audio del sistema. La captura de pantalla requiere HTTPS y una autorización explícita del usuario.
+
+Ninguna página puede garantizar funcionamiento en todas las instituciones: una política administrada puede bloquear la captura, el micrófono o las cargas. Esta arquitectura evita la descarga de modelos y ejecutables en el equipo, lo que mejora considerablemente la compatibilidad frente a Whisper ejecutado en el navegador.
+
+## Rendimiento del servidor gratuito
+
+El hardware CPU gratuito puede tardar en despertar y Whisper Large v3 Turbo puede procesar lentamente grabaciones extensas. El mismo contenedor puede desplegarse posteriormente en un proveedor Docker con CPU más potente o GPU sin modificar el frontend.
+
+## Privacidad
+
+La grabación sí se envía al servidor, porque la conversión y la IA ya no se ejecutan en el dispositivo. Consulta `docs/PRIVACY.md` antes de utilizar la aplicación con datos personales o grabaciones de otras personas.
+
+## Desarrollo opcional
+
+Para revisar el frontend localmente puedes usar cualquier servidor estático. No es necesario para GitHub Pages.
+
+Para ejecutar el backend con Docker:
 
 ```bash
-npm install --ignore-scripts
-npm run dev
+docker build -t screencribe-api ./backend
+docker run --rm -p 7860:7860 \
+  -e ALLOWED_ORIGINS=http://localhost:5500 \
+  screencribe-api
 ```
 
-Vite mostrará la dirección local. La captura de pantalla funciona en `localhost`, que el navegador considera un contexto seguro.
+## Estructura
 
-## Publicar en GitHub Pages
-
-1. Crea un repositorio de GitHub.
-2. Copia el contenido del proyecto y súbelo a la rama `main`.
-3. Abre **Settings → Pages**.
-4. En **Source**, selecciona **GitHub Actions**.
-5. El workflow `.github/workflows/pages.yml` compilará y publicará la aplicación.
-
-La opción `base: './'` permite usar tanto un repositorio de proyecto como un sitio `usuario.github.io`.
-
-## Verificar el proyecto
-
-```bash
-npm run format:check
-npm run check
-npm run build
+```text
+screencribe/
+├── index.html
+├── assets/
+├── src/
+├── icons/
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/main.py
+├── docs/
+└── .github/workflows/
 ```
-
-## Limitaciones reales
-
-- La primera preparación de Whisper Large descarga varios gigabytes y puede tardar según la conexión.
-- El modelo puede no caber en GPUs o equipos con poca memoria.
-- La cuantización reduce recursos, pero puede producir una pequeña pérdida de precisión frente a los pesos completos.
-- El navegador puede eliminar la caché del modelo si necesita liberar almacenamiento.
-- Firefox, Safari y dispositivos móviles pueden no ofrecer WebGPU compatible o suficiente memoria.
-- La captura del audio del sistema depende del navegador, sistema operativo y elemento compartido.
-- Las grabaciones largas consumen memoria durante la decodificación y la transcripción.
-- Whisper no identifica hablantes en esta implementación.
-- Ningún sistema automático garantiza una transcripción perfecta; revisa nombres propios, cifras y terminología crítica.
-
-## Privacidad y consentimiento
-
-La grabación, conversión y transcripción se realizan en el dispositivo. Los archivos del modelo se descargan desde Hugging Face, pero el audio seleccionado no se envía allí. Antes de grabar o transcribir a otras personas, obtén las autorizaciones que correspondan.
-
-Consulta [Arquitectura](docs/ARCHITECTURE.md), [IA local](docs/LOCAL_AI.md), [Privacidad](docs/PRIVACY.md) y [Seguridad](SECURITY.md).
 
 ## Licencia
 
-El código de esta aplicación se distribuye bajo licencia MIT. Las dependencias y el modelo conservan sus licencias respectivas.
+MIT.

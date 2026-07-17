@@ -1,59 +1,28 @@
 # Arquitectura
 
-## Aplicación estática
+## Frontend
 
-El proyecto se compila con Vite y TypeScript y se publica en GitHub Pages. No incluye servidor, cuentas, base de datos ni secretos.
+GitHub Pages sirve HTML, CSS y JavaScript estáticos. No utiliza Vite, npm, FFmpeg.wasm, WebGPU ni modelos descargados en el navegador.
 
-## Grabación
+La captura usa APIs nativas del navegador:
 
-1. `getDisplayMedia()` solicita pantalla, ventana o pestaña.
-2. `getUserMedia()` solicita el micrófono cuando está habilitado.
-3. Web Audio API mezcla micrófono y audio compartido con ganancias independientes.
-4. `MediaRecorder` genera el archivo compatible con el navegador, normalmente WebM.
-5. Las pistas se detienen y los recursos se liberan al finalizar.
+1. `getDisplayMedia()` para pantalla, ventana o pestaña.
+2. `getUserMedia()` para micrófono.
+3. Web Audio API para mezclar audio compartido y micrófono.
+4. `MediaRecorder` para crear el archivo original.
 
-## Conversión multimedia
+## Backend
 
-`ffmpeg.wasm` se carga bajo demanda y se ejecuta en el navegador:
+El backend Docker usa:
 
-- MP4: H.264 + AAC.
-- MP3: audio a 128 kbps.
+- FastAPI para recepción, estado y descargas.
+- FFmpeg del sistema para MP4, MP3 y normalización del audio.
+- faster-whisper con Whisper Large v3 Turbo en CPU e INT8.
+- Trabajos asíncronos en una cola de un proceso.
+- Directorios temporales por trabajo.
 
-El archivo no se envía a un servidor. El límite práctico depende de la memoria disponible.
+## Flujo
 
-## Preparación de audio para Whisper
+Navegador → carga del archivo → backend → FFmpeg/Whisper → descargas → eliminación temporal.
 
-1. Web Audio API decodifica el archivo seleccionado.
-2. `OfflineAudioContext` mezcla canales y remuestrea a mono, 16 kHz.
-3. El resultado se representa como `Float32Array`.
-4. El búfer se transfiere, sin copiar, a un Web Worker.
-
-## Transcripción
-
-El Web Worker utiliza Transformers.js y WebGPU para cargar `onnx-community/whisper-large-v3-ONNX` con encoder y decoder cuantizados en 4 bits.
-
-El audio se divide en bloques de 28 segundos con 2 segundos de solapamiento. Después de cada bloque:
-
-- Se desplazan las marcas de tiempo al punto correcto del audio completo.
-- Se descartan segmentos duplicados de la zona solapada.
-- Se informa progreso a la interfaz.
-- Se consolidan texto y segmentos para exportar subtítulos.
-
-## Flujo de datos
-
-```text
-Archivo local
-   ├── descarga directa
-   ├── ffmpeg.wasm → MP4/MP3 → descarga
-   └── Web Audio API → Float32 16 kHz
-                           ↓ transferencia
-                    Web Worker / WebGPU
-                           ↓
-                  Whisper Large v3 q4
-                           ↓
-                  texto + timestamps
-```
-
-## Caché
-
-Transformers.js usa la caché del navegador para reutilizar los archivos descargados del modelo. La aplicación no controla cuánto tiempo se conservarán: el usuario o el navegador pueden eliminarlos.
+El servidor puede desplegarse en Hugging Face Spaces o en cualquier proveedor que ejecute Docker.
