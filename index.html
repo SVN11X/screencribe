@@ -4,275 +4,564 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#101828" />
+    <meta name="theme-color" content="#f5f7f5" />
     <meta
       name="description"
-      content="Graba pantalla y audio, genera MP4 y MP3 y transcribe con Whisper Large v3 Turbo desde un servidor, sin instalar modelos en el dispositivo."
+      content="Tu estudio de grabación en el navegador. Captura pantalla, ventana o pestaña, revisa el video y convierte a MP4 o MP3."
     />
-    <title>Screencribe</title>
+    <title>Screencribe · Tu estudio de grabación</title>
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./assets/styles.css" />
   </head>
   <body>
     <a class="skip-link" href="#main">Saltar al contenido</a>
+    <svg
+      class="icon-definitions"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-screen" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="13" rx="2" />
+        <path d="M8 21h8m-4-4v4" />
+      </symbol>
+      <symbol id="i-window" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18M7 6.5h.01m3 0h.01" />
+      </symbol>
+      <symbol id="i-tab" viewBox="0 0 24 24">
+        <path
+          d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Zm0 0V5a2 2 0 0 1 2-2h6l3 5"
+        />
+      </symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24">
+        <rect x="9" y="2" width="6" height="13" rx="3" />
+        <path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8" />
+      </symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24">
+        <path
+          d="m11 4-6 5H2v6h3l6 5V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"
+        />
+      </symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24">
+        <path
+          d="M12 16V3m-5 5 5-5 5 5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"
+        />
+      </symbol>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path
+          d="M12 3v13m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"
+        />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M4 12h16m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6" />
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4Z" />
+        <path d="m8 12 3 3 5-6" />
+      </symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24">
+        <path d="M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z" />
+      </symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24">
+        <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+      </symbol>
+      <symbol id="i-file" viewBox="0 0 24 24">
+        <path d="M14 2H5v20h14V7l-5-5Zm0 0v5h5" />
+        <path d="M8 13h8m-8 4h5" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="m8 4 12 8-12 8V4Z" />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path d="m6 6 12 12M6 18 18 6" />
+      </symbol>
+    </svg>
 
     <header class="topbar">
-      <div class="brand" aria-label="Screencribe">
-        <img src="./icons/icon.svg" alt="" width="42" height="42" />
-        <div>
-          <strong>Screencribe</strong>
-          <span>Grabación y transcripción sin instalar modelos</span>
-        </div>
-      </div>
+      <a class="brand" href="./" aria-label="Screencribe, inicio"
+        ><img src="./icons/icon.svg" alt="" width="36" height="36" /><span
+          >screencribe<span class="brand-dot">.</span></span
+        ></a
+      >
+      <span class="topbar-label">ESTUDIO DE GRABACIÓN</span>
       <div class="topbar-actions">
-        <span id="apiBadge" class="badge badge-neutral">Servidor sin configurar</span>
-        <button id="openSettings" class="button button-secondary button-small" type="button">
-          Configurar servidor
+        <span id="converterBadge" class="badge badge-success"
+          ><span class="status-dot"></span>Conversión local · Gratis</span
+        >
+        <button
+          id="themeToggle"
+          class="icon-button"
+          type="button"
+          aria-label="Cambiar a tema oscuro"
+          title="Cambiar tema"
+        >
+          <svg class="icon"><use href="#i-moon" /></svg>
         </button>
       </div>
     </header>
 
     <main id="main" class="page-shell">
-      <section class="hero panel">
+      <section class="hero" aria-labelledby="pageTitle">
         <div>
-          <p class="eyebrow">GRABADOR WEB</p>
-          <h1>Graba, convierte y transcribe desde cualquier computador compatible</h1>
+          <p class="eyebrow"><span></span> MENOS PASOS. MÁS IDEAS.</p>
+          <h1 id="pageTitle">
+            Tu pantalla.<br class="mobile-break" />
+            Lista para compartir.
+          </h1>
           <p class="hero-copy">
-            La grabación ocurre en el navegador. La conversión a MP4/MP3 y la transcripción con
-            Whisper Large v3 Turbo se ejecutan en tu servidor, para evitar descargar modelos de IA
-            en cada equipo.
+            Graba una explicación, una clase o tu próxima gran idea.<br
+              class="desktop-break"
+            />
+            Revisa el resultado y llévalo a MP4 o MP3.
           </p>
         </div>
-        <div class="privacy-note">
-          <strong>Privacidad</strong>
-          <span>Los archivos se eliminan automáticamente del servidor después del plazo configurado.</span>
-        </div>
-      </section>
-
-      <section class="workspace-grid" aria-label="Área de trabajo">
-        <article class="panel card">
-          <div class="card-heading">
-            <div>
-              <p class="step">PASO 1</p>
-              <h2>Crear o cargar una grabación</h2>
-            </div>
-            <span id="recordingTimer" class="timer" aria-live="polite">00:00:00</span>
-          </div>
-
-          <div class="option-grid">
-            <label class="toggle-row">
-              <input id="includeMic" type="checkbox" checked />
-              <span>
-                <strong>Micrófono</strong>
-                <small>Incluye tu voz en la grabación.</small>
-              </span>
-            </label>
-            <label class="toggle-row">
-              <input id="includeSystemAudio" type="checkbox" checked />
-              <span>
-                <strong>Audio compartido</strong>
-                <small>Depende del navegador y de lo que selecciones al compartir.</small>
-              </span>
-            </label>
-          </div>
-
-          <div class="button-row">
-            <button id="startRecording" class="button button-primary" type="button">
-              Iniciar grabación
-            </button>
-            <button id="pauseRecording" class="button button-secondary" type="button" disabled>
-              Pausar
-            </button>
-            <button id="stopRecording" class="button button-danger" type="button" disabled>
-              Detener
-            </button>
-          </div>
-
-          <div class="divider"><span>o</span></div>
-
-          <label class="file-drop" for="fileInput">
-            <input
-              id="fileInput"
-              type="file"
-              accept="video/*,audio/*,.webm,.mp4,.m4a,.mp3,.wav,.ogg,.mov,.mkv"
-            />
-            <strong>Cargar una grabación existente</strong>
-            <span>Video o audio. El límite depende del servidor configurado.</span>
-          </label>
-
-          <div id="sourceInfo" class="source-info hidden" aria-live="polite">
-            <div>
-              <span>Archivo seleccionado</span>
-              <strong id="sourceName"></strong>
-            </div>
-            <div>
-              <span>Tamaño</span>
-              <strong id="sourceSize"></strong>
-            </div>
-            <button id="clearSource" class="button button-ghost button-small" type="button">
-              Quitar
-            </button>
-          </div>
-        </article>
-
-        <article class="panel card preview-card">
-          <div class="card-heading">
-            <div>
-              <p class="step">VISTA PREVIA</p>
-              <h2>Revisa el archivo</h2>
-            </div>
-          </div>
-          <div id="previewPlaceholder" class="preview-placeholder">
-            <span>La vista previa aparecerá aquí.</span>
-          </div>
-          <video id="videoPreview" class="media-preview hidden" controls playsinline></video>
-          <audio id="audioPreview" class="audio-preview hidden" controls></audio>
-          <div class="button-row compact">
-            <button id="downloadOriginal" class="button button-secondary" type="button" disabled>
-              Descargar original
-            </button>
-          </div>
-        </article>
-      </section>
-
-      <section class="panel card processing-card">
-        <div class="card-heading">
+        <div class="hero-note">
+          <svg class="icon"><use href="#i-shield" /></svg>
           <div>
-            <p class="step">PASO 2</p>
-            <h2>Procesar en el servidor</h2>
+            <strong>Tú tienes el control</strong
+            ><span
+              >Graba, convierte y descarga en tu equipo.<br />Tus archivos
+              permanecen contigo.</span
+            >
           </div>
         </div>
+      </section>
 
-        <div class="processing-grid">
-          <fieldset>
-            <legend>Resultados</legend>
-            <label class="check-row"><input id="wantTranscript" type="checkbox" checked /> Transcripción</label>
-            <label class="check-row"><input id="wantMp4" type="checkbox" checked /> Video MP4</label>
-            <label class="check-row"><input id="wantMp3" type="checkbox" checked /> Audio MP3</label>
-          </fieldset>
+      <div class="workflow">
+        <span class="workflow-step active"><b>01</b> Captura o carga</span
+        ><span class="workflow-line"></span
+        ><span id="reviewStep" class="workflow-step"><b>02</b> Revisa</span
+        ><span class="workflow-line"></span
+        ><span id="exportStep" class="workflow-step"><b>03</b> Exporta</span>
+      </div>
 
-          <div class="form-field">
-            <label for="language">Idioma</label>
-            <select id="language">
-              <option value="">Detectar automáticamente</option>
-              <option value="es" selected>Español</option>
-              <option value="en">Inglés</option>
-              <option value="pt">Portugués</option>
-              <option value="fr">Francés</option>
-              <option value="de">Alemán</option>
-              <option value="it">Italiano</option>
-            </select>
+      <section class="studio-grid" aria-label="Estudio de grabación">
+        <article class="panel setup-card">
+          <div class="mode-tabs" role="tablist" aria-label="Origen del archivo">
+            <button
+              id="recordTab"
+              class="mode-tab"
+              role="tab"
+              aria-selected="true"
+              aria-controls="recordPanel"
+              tabindex="0"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-screen" /></svg>Grabar</button
+            ><button
+              id="uploadTab"
+              class="mode-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="uploadPanel"
+              tabindex="-1"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-upload" /></svg>Cargar archivo
+            </button>
           </div>
-
-          <div class="form-field wide">
-            <label for="prompt">Palabras difíciles o nombres propios <span>(opcional)</span></label>
-            <textarea
-              id="prompt"
-              rows="3"
-              maxlength="1000"
-              placeholder="Ejemplo: Screencribe, Valdivia, Peñaflor, nombres de estudiantes, conceptos técnicos…"
-            ></textarea>
+          <div
+            id="recordPanel"
+            class="setup-body"
+            role="tabpanel"
+            aria-labelledby="recordTab"
+          >
+            <div class="section-heading">
+              <h2>Prepara tu captura</h2>
+              <p>Elige qué y cómo quieres grabar.</p>
+            </div>
+            <fieldset class="surface-field">
+              <legend>¿Qué quieres compartir?</legend>
+              <div class="surface-options">
+                <label
+                  ><input
+                    name="surface"
+                    type="radio"
+                    value="browser"
+                    checked
+                  /><span
+                    ><svg class="icon"><use href="#i-tab" /></svg>Pestaña</span
+                  ></label
+                ><label
+                  ><input name="surface" type="radio" value="window" /><span
+                    ><svg class="icon"><use href="#i-window" /></svg
+                    >Ventana</span
+                  ></label
+                ><label
+                  ><input name="surface" type="radio" value="monitor" /><span
+                    ><svg class="icon"><use href="#i-screen" /></svg
+                    >Pantalla</span
+                  ></label
+                >
+              </div>
+              <p class="field-hint">
+                La selección final se hace en el navegador.
+              </p>
+            </fieldset>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="quality">Resolución</label
+                ><select id="quality">
+                  <option value="1080">Full HD · 1080p</option>
+                  <option value="720">HD · 720p</option>
+                  <option value="original">Original · hasta 4K</option>
+                </select>
+              </div>
+              <div class="form-field fps-field">
+                <label for="frameRate">Fluidez</label
+                ><select id="frameRate">
+                  <option value="30">30 fps</option>
+                  <option value="60">60 fps</option>
+                </select>
+              </div>
+            </div>
+            <div class="audio-options">
+              <label class="toggle-row"
+                ><svg class="icon"><use href="#i-mic" /></svg
+                ><span
+                  ><strong>Micrófono</strong><small>Incluye tu voz</small></span
+                ><input
+                  id="includeMic"
+                  class="switch"
+                  type="checkbox"
+                  checked /></label
+              ><label class="toggle-row"
+                ><svg class="icon"><use href="#i-volume" /></svg
+                ><span
+                  ><strong>Audio compartido</strong
+                  ><small>Actívalo también al compartir</small></span
+                ><input
+                  id="includeSystemAudio"
+                  class="switch"
+                  type="checkbox"
+                  checked
+              /></label>
+            </div>
+            <button
+              id="startRecording"
+              class="button button-primary record-button"
+              type="button"
+            >
+              <span class="record-dot"></span
+              ><span id="startLabel">Iniciar grabación</span
+              ><svg class="icon"><use href="#i-arrow" /></svg>
+            </button>
+            <p class="capture-hint">
+              La grabación comienza al dar los permisos.<br />Para capturar una
+              ventana, mantenla abierta.
+            </p>
           </div>
+          <div
+            id="uploadPanel"
+            class="setup-body hidden"
+            role="tabpanel"
+            aria-labelledby="uploadTab"
+          >
+            <div class="section-heading">
+              <h2>Trae tu archivo</h2>
+              <p>Convierte un video o un audio existente.</p>
+            </div>
+            <div id="fileDrop" class="file-drop">
+              <svg class="icon"><use href="#i-upload" /></svg
+              ><strong>Arrastra tu archivo aquí</strong
+              ><span>o selecciónalo en tu equipo</span
+              ><label class="button button-secondary" for="fileInput"
+                >Elegir archivo</label
+              ><input
+                id="fileInput"
+                class="file-input"
+                type="file"
+                accept="video/*,audio/*,.webm,.mp4,.m4a,.mp3,.wav,.ogg,.mov,.mkv,.aac,.flac"
+              /><small
+                >MP4, WebM, MOV, MP3, WAV y más.<br /><span id="uploadLimit"
+                  >Sin tope fijo de tamaño. Sujeto a memoria disponible.</span
+                ></small
+              >
+            </div>
+            <div class="import-note">
+              <svg class="icon"><use href="#i-file" /></svg>
+              <p>
+                Extrae el audio de un video a MP3 o convierte tu grabación a
+                MP4.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel preview-card">
+          <div class="preview-heading">
+            <div>
+              <span class="eyebrow small">VISTA PREVIA</span>
+              <h2 id="previewTitle">Un espacio para tus ideas</h2>
+            </div>
+            <span id="recordingStatus" class="badge badge-neutral"
+              ><span class="status-dot"></span>En espera</span
+            >
+          </div>
+          <div id="previewStage" class="preview-stage">
+            <div id="previewPlaceholder" class="preview-placeholder">
+              <div class="preview-art">
+                <div class="art-window">
+                  <div class="art-top"><i></i><i></i><i></i></div>
+                  <div class="art-content">
+                    <span class="art-line"></span
+                    ><span class="art-line short"></span
+                    ><span class="art-line"></span>
+                  </div>
+                  <div class="art-play">
+                    <svg class="icon"><use href="#i-play" /></svg>
+                  </div>
+                </div>
+                <span class="art-tag"><span></span> REC</span>
+                <div class="art-wave">
+                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+                  ><i></i><i></i><i></i>
+                </div>
+              </div>
+              <strong>Todo empieza con un clic</strong>
+              <p>
+                Inicia una captura o carga un archivo.<br />Podrás revisarlo
+                aquí antes de compartirlo.
+              </p>
+            </div>
+            <video
+              id="videoPreview"
+              class="media-preview hidden"
+              controls
+              playsinline
+            ></video>
+            <div id="audioStage" class="audio-stage hidden">
+              <svg class="icon"><use href="#i-volume" /></svg
+              ><span>Tu audio, listo para escuchar</span
+              ><audio id="audioPreview" controls preload="metadata"></audio>
+            </div>
+            <div id="pausedOverlay" class="paused-overlay hidden">
+              Grabación en pausa
+            </div>
+          </div>
+          <div class="preview-footer">
+            <div class="timer-group">
+              <span id="timerDot" class="timer-dot"></span
+              ><span
+                id="recordingTimer"
+                class="timer"
+                aria-label="Duración de la grabación"
+                >00:00:00</span
+              ><span id="captureMeta" class="capture-meta"
+                >Sin archivo todavía</span
+              >
+            </div>
+            <div class="preview-actions">
+              <button
+                id="pauseRecording"
+                class="button button-secondary button-small hidden"
+                type="button"
+              >
+                Pausar</button
+              ><button
+                id="stopRecording"
+                class="button button-danger button-small hidden"
+                type="button"
+              >
+                <span class="stop-square"></span>Detener</button
+              ><button
+                id="expandPreview"
+                class="icon-button"
+                type="button"
+                aria-label="Ampliar vista previa"
+                title="Ampliar vista previa"
+                disabled
+              >
+                <svg class="icon"><use href="#i-expand" /></svg>
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <div id="noticeBox" class="alert alert-notice hidden" role="status"></div>
+      <div
+        id="errorBox"
+        class="alert alert-error hidden"
+        role="alert"
+        tabindex="-1"
+      ></div>
+      <section
+        id="sourceInfo"
+        class="source-info panel hidden"
+        aria-label="Archivo seleccionado"
+      >
+        <div class="source-icon">
+          <svg class="icon"><use href="#i-file" /></svg>
         </div>
+        <div class="source-details">
+          <strong id="sourceName"></strong><span id="sourceSize"></span>
+        </div>
+        <span class="badge badge-success">Listo para exportar</span
+        ><button
+          id="clearSource"
+          class="icon-button"
+          type="button"
+          aria-label="Quitar archivo"
+          title="Quitar archivo"
+        >
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </section>
 
-        <div class="button-row">
-          <button id="processFile" class="button button-primary" type="button" disabled>
-            Procesar archivo
+      <section class="panel export-card" aria-labelledby="exportTitle">
+        <div class="export-heading">
+          <span class="step-number">03</span>
+          <div>
+            <h2 id="exportTitle">Dale el formato que necesitas</h2>
+            <p id="exportHint">
+              Convierte gratis en tu navegador. El motor está incluido en esta
+              página y se carga automáticamente, sin instalaciones.
+            </p>
+          </div>
+          <button
+            id="downloadOriginal"
+            class="button button-secondary"
+            type="button"
+            disabled
+          >
+            <svg class="icon"><use href="#i-download" /></svg>Descargar original
           </button>
-          <button id="cancelJob" class="button button-secondary hidden" type="button">
-            Cancelar seguimiento
+        </div>
+        <fieldset class="format-field">
+          <legend class="sr-only">Formatos de salida</legend>
+          <div class="format-grid">
+            <label class="format-option"
+              ><input id="wantMp4" type="checkbox" checked /><span
+                class="format-icon"
+                >MP4</span
+              ><span class="format-copy"
+                ><strong>Video para compartir</strong
+                ><small
+                  >H.264 · Hasta 1080p · Compatible con tus dispositivos</small
+                ></span
+              ><span class="format-check"
+                ><svg class="icon"><use href="#i-check" /></svg></span></label
+            ><label class="format-option"
+              ><input id="wantMp3" type="checkbox" checked /><span
+                class="format-icon audio"
+                >MP3</span
+              ><span class="format-copy"
+                ><strong>Solo el audio</strong
+                ><small>192 kbps · Clases, voz y notas de audio</small></span
+              ><span class="format-check"
+                ><svg class="icon"><use href="#i-check" /></svg></span
+            ></label>
+          </div>
+        </fieldset>
+        <div class="export-actions">
+          <p class="conversion-privacy">
+            <svg class="icon"><use href="#i-shield" /></svg
+            ><span id="privacyText"
+              >La conversión ocurre en tu navegador. Tu archivo no se envía a
+              ningún servidor.</span
+            >
+          </p>
+          <button
+            id="cancelJob"
+            class="button button-secondary hidden"
+            type="button"
+          >
+            Cancelar conversión</button
+          ><button
+            id="processFile"
+            class="button button-primary"
+            type="button"
+            disabled
+          >
+            <span id="processLabel">Convertir en mi equipo</span
+            ><svg class="icon"><use href="#i-arrow" /></svg>
           </button>
         </div>
-
-        <div id="progressBox" class="progress-box hidden" aria-live="polite">
+        <div
+          id="progressBox"
+          class="progress-box hidden"
+          role="status"
+          aria-live="polite"
+        >
           <div class="progress-heading">
-            <strong id="progressTitle">Preparando…</strong>
-            <span id="progressPercent">0%</span>
+            <strong id="progressTitle">Preparando…</strong
+            ><span id="progressPercent">0%</span>
           </div>
-          <progress id="progressBar" max="100" value="0"></progress>
-          <p id="progressMessage">Esperando al servidor.</p>
+          <progress
+            id="progressBar"
+            max="100"
+            value="0"
+            aria-label="Progreso de conversión"
+          ></progress>
+          <p id="progressMessage"></p>
         </div>
-
-        <div id="errorBox" class="alert alert-error hidden" role="alert"></div>
       </section>
 
-      <section id="resultsSection" class="panel card hidden">
-        <div class="card-heading">
+      <section
+        id="resultsSection"
+        class="panel results-card hidden"
+        aria-labelledby="resultsTitle"
+        tabindex="-1"
+      >
+        <div class="results-heading">
+          <span class="result-check"
+            ><svg class="icon"><use href="#i-check" /></svg
+          ></span>
           <div>
-            <p class="step">PASO 3</p>
-            <h2>Descargar resultados</h2>
+            <h2 id="resultsTitle">Listo. Ahora es tuyo.</h2>
+            <p>Descarga los archivos antes de cerrar o recargar esta página.</p>
           </div>
-          <span id="detectedLanguage" class="badge badge-neutral"></span>
+          <button
+            id="deleteResults"
+            class="button button-ghost button-small"
+            type="button"
+          >
+            Quitar resultados
+          </button>
         </div>
-
         <div id="downloadGrid" class="download-grid"></div>
-
-        <div id="transcriptPanel" class="transcript-panel hidden">
-          <div class="transcript-toolbar">
-            <div>
-              <h3>Transcripción editable</h3>
-              <p>Corrige el texto antes de exportarlo.</p>
-            </div>
-            <div class="button-row compact">
-              <button id="exportTxt" class="button button-secondary button-small" type="button">TXT</button>
-              <button id="exportSrt" class="button button-secondary button-small" type="button">SRT</button>
-              <button id="exportVtt" class="button button-secondary button-small" type="button">VTT</button>
-              <button id="exportJson" class="button button-secondary button-small" type="button">JSON</button>
-            </div>
-          </div>
-          <textarea id="transcriptEditor" rows="16" spellcheck="true"></textarea>
-        </div>
+        <p id="resultWarnings" class="result-warnings hidden" role="status"></p>
       </section>
-
-      <section class="panel compatibility-panel">
-        <h2>Compatibilidad real</h2>
-        <div class="compatibility-grid">
-          <div>
-            <strong>Sin instalaciones</strong>
-            <span>Quien usa la página no instala Node.js, FFmpeg ni modelos de IA.</span>
-          </div>
-          <div>
-            <strong>Permisos obligatorios</strong>
-            <span>El navegador siempre pedirá autorización para compartir pantalla y micrófono.</span>
-          </div>
-          <div>
-            <strong>Restricciones institucionales</strong>
-            <span>Algunas redes pueden bloquear micrófono, captura de pantalla o subida de archivos.</span>
-          </div>
+      <div class="tips-row">
+        <div>
+          <svg class="icon"><use href="#i-check" /></svg
+          ><span
+            ><strong>Sin instalaciones</strong>Abre, graba y descarga.</span
+          >
         </div>
-      </section>
+        <div>
+          <svg class="icon"><use href="#i-window" /></svg
+          ><span
+            ><strong>Sin estirar la imagen</strong>La ventana se ajusta al
+            encuadre.</span
+          >
+        </div>
+        <div>
+          <svg class="icon"><use href="#i-volume" /></svg
+          ><span
+            ><strong>Mejor audio en una pestaña</strong>Activa «Compartir audio»
+            al elegirla.</span
+          >
+        </div>
+      </div>
     </main>
 
-    <dialog id="settingsDialog">
-      <form method="dialog" class="settings-form">
-        <div class="dialog-heading">
-          <div>
-            <p class="step">CONFIGURACIÓN</p>
-            <h2>Servidor de procesamiento</h2>
-          </div>
-          <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
-        </div>
-        <p>
-          Ingresa la dirección pública del backend desplegado, por ejemplo
-          <code>https://usuario-screencribe-api.hf.space</code>.
-        </p>
-        <div class="form-field">
-          <label for="apiUrl">URL del servidor</label>
-          <input id="apiUrl" type="url" placeholder="https://…hf.space" autocomplete="url" />
-        </div>
-        <div class="dialog-actions">
-          <button id="testApi" class="button button-secondary" type="button">Probar conexión</button>
-          <button id="saveSettings" class="button button-primary" value="default">Guardar</button>
-        </div>
-        <p id="settingsStatus" class="settings-status" aria-live="polite"></p>
-      </form>
-    </dialog>
-
     <footer>
-      <span>Screencribe · Código abierto</span>
-      <span>Usa solo grabaciones para las que tengas autorización.</span>
+      <a class="brand footer-brand" href="./"
+        >screencribe<span class="brand-dot">.</span></a
+      ><span>Hecho para explicar, enseñar y compartir.</span
+      ><a href="./assets/vendor/ffmpeg-core/licenses.html">Licencias</a
+      ><a
+        href="https://github.com/SVN11X/screencribe"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Código abierto <span aria-hidden="true">↗</span></a
+      >
     </footer>
-
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

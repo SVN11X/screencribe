@@ -1,1 +1,0 @@
-"""Screencribe processing API."""

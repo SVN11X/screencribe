@@ -1,0 +1,2 @@
+# Preserve the exact generated upstream core, including its original whitespace.
+assets/vendor/ffmpeg-core/ffmpeg-core.js whitespace=-blank-at-eol

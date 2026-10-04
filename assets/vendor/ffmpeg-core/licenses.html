@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Licencias · Screencribe</title>
+    <style>
+      :root {
+        font:
+          16px/1.65 system-ui,
+          sans-serif;
+        color-scheme: light dark;
+      }
+      body {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+      a {
+        color: light-dark(#235d4d, #9ed2be);
+      }
+      h1 {
+        font-size: 2rem;
+        line-height: 1.25;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.875rem;
+      }
+      th,
+      td {
+        padding: 12px 8px;
+        border-bottom: 1px solid light-dark(#d9dfdc, #414a46);
+        text-align: left;
+        vertical-align: top;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      .table-wrap {
+        overflow: auto;
+      }
+      small {
+        color: light-dark(#58655e, #b1bbb5);
+      }
+      @media (max-width: 450px) {
+        body {
+          padding: 24px 12px;
+        }
+        th,
+        td {
+          padding: 10px 5px;
+          font-size: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="../../../index.html">← Volver a Screencribe</a>
+      <h1>Bibliotecas y licencias</h1>
+      <p>
+        Screencribe utiliza FFmpeg.wasm para convertir los archivos en tu
+        navegador. El motor está incluido con la página. Estas fuentes y avisos
+        son para consultar o modificar la biblioteca; no necesitas descargarlos
+        para utilizar la herramienta.
+      </p>
+      <p>
+        El núcleo <strong>@ffmpeg/core 0.12.10</strong> contiene FFmpeg 5.1.4 y
+        bibliotecas adicionales, bajo <strong>GPL-2.0-or-later</strong>. Los
+        binarios oficiales no se han modificado. El wrapper
+        <strong>@ffmpeg/ffmpeg 0.12.15</strong> y el código propio de
+        Screencribe conservan MIT. Los componentes mantienen sus avisos y
+        licencias originales dentro de cada archivo de fuentes.
+      </p>
+      <p>
+        <a href="COPYING.GPLv2">GPL versión 2</a> ·
+        <a href="COPYING.GPLv3">GPL versión 3</a> ·
+        <a href="COPYING.LGPLv2.1">LGPL 2.1</a> ·
+        <a href="../ffmpeg/LICENSE">MIT del wrapper</a>
+      </p>
+      <h2>Fuentes de la versión incluida</h2>
+      <p>
+        Los archivos contienen el código y los avisos de sus autores. El paquete
+        de ffmpeg.wasm incluye las modificaciones de FFmpeg, bindings y scripts
+        utilizados para compilar el núcleo; Emscripten incluye el runtime y las
+        herramientas de su versión.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Componente</th>
+              <th scope="col">Versión / commit</th>
+              <th scope="col">Código fuente</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">x264</th>
+              <td><code>4-cores</code><br /><small>33cac6b77d5b</small></td>
+              <td>
+                <a href="sources/x264-33cac6b77d5b.tar.gz">Fuentes de x264</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">x265</th>
+              <td><code>3.4</code><br /><small>2bb5520e9596</small></td>
+              <td>
+                <a href="sources/x265-2bb5520e9596.tar.gz">Fuentes de x265</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">libvpx</th>
+              <td><code>v1.13.1</code><br /><small>10b9492dcf05</small></td>
+              <td>
+                <a href="sources/libvpx-10b9492dcf05.tar.gz"
+                  >Fuentes de libvpx</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">lame</th>
+              <td><code>master</code><br /><small>2badea1974ae</small></td>
+              <td>
+                <a href="sources/lame-2badea1974ae.tar.gz">Fuentes de lame</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">ogg</th>
+              <td><code>v1.3.4</code><br /><small>bada45718453</small></td>
+              <td>
+                <a href="sources/ogg-bada45718453.tar.gz">Fuentes de ogg</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">theora</th>
+              <td><code>v1.1.1</code><br /><small>7ffd8b2ecfc2</small></td>
+              <td>
+                <a href="sources/theora-7ffd8b2ecfc2.tar.gz"
+                  >Fuentes de theora</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">opus</th>
+              <td><code>v1.3.1</code><br /><small>e85ed7726db5</small></td>
+              <td>
+                <a href="sources/opus-e85ed7726db5.tar.gz">Fuentes de opus</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">vorbis</th>
+              <td><code>v1.3.3</code><br /><small>779816404319</small></td>
+              <td>
+                <a href="sources/vorbis-779816404319.tar.gz"
+                  >Fuentes de vorbis</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">zlib</th>
+              <td><code>v1.2.11</code><br /><small>cacf7f1d4e3d</small></td>
+              <td>
+                <a href="sources/zlib-cacf7f1d4e3d.tar.gz">Fuentes de zlib</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">libwebp</th>
+              <td><code>v1.3.2</code><br /><small>ca332209cb55</small></td>
+              <td>
+                <a href="sources/libwebp-ca332209cb55.tar.gz"
+                  >Fuentes de libwebp</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">freetype2</th>
+              <td><code>VER-2-10-4</code><br /><small>6a2b3e4007e7</small></td>
+              <td>
+                <a href="sources/freetype2-6a2b3e4007e7.tar.gz"
+                  >Fuentes de freetype2</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">fribidi</th>
+              <td><code>v1.0.9</code><br /><small>f9e8e71a6fbf</small></td>
+              <td>
+                <a href="sources/fribidi-f9e8e71a6fbf.tar.gz"
+                  >Fuentes de fribidi</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">harfbuzz</th>
+              <td><code>5.2.0</code><br /><small>4a1d891c6317</small></td>
+              <td>
+                <a href="sources/harfbuzz-4a1d891c6317.tar.gz"
+                  >Fuentes de harfbuzz</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">libass</th>
+              <td><code>0.15.0</code><br /><small>d149636f502f</small></td>
+              <td>
+                <a href="sources/libass-d149636f502f.tar.gz"
+                  >Fuentes de libass</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">zimg</th>
+              <td>
+                <code>release-3.0.5</code><br /><small>e5b0de6bebbc</small>
+              </td>
+              <td>
+                <a href="sources/zimg-e5b0de6bebbc.tar.gz">Fuentes de zimg</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">ffmpeg</th>
+              <td><code>n5.1.4</code><br /><small>4729204c17f7</small></td>
+              <td>
+                <a href="sources/ffmpeg-4729204c17f7.tar.gz"
+                  >Fuentes de ffmpeg</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">ffmpeg-wasm</th>
+              <td>
+                <code>71aa99d37c02a7b4c435</code><br /><small
+                  >71aa99d37c02</small
+                >
+              </td>
+              <td>
+                <a href="sources/ffmpeg-wasm-71aa99d37c02.tar.gz"
+                  >Fuentes de ffmpeg-wasm</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">sdl2</th>
+              <td>
+                <code>release-2.24.2</code><br /><small>55b03c7493a7</small>
+              </td>
+              <td>
+                <a href="sources/sdl2-55b03c7493a7.tar.gz">Fuentes de sdl2</a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">emscripten</th>
+              <td><code>3.1.40</code><br /><small>5c27e79dd0a9</small></td>
+              <td>
+                <a href="sources/emscripten-5c27e79dd0a9.tar.gz"
+                  >Fuentes de emscripten</a
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <a href="README.md">Receta de compilación y detalles</a> ·
+        <a href="manifest.json">Manifiesto de integridad SHA-256</a> ·
+        <a
+          href="https://github.com/ffmpegwasm/ffmpeg.wasm/tree/71aa99d37c02a7b4c435275ca9ef50e612f6efa1"
+          >Proyecto original</a
+        >
+      </p>
+    </main>
+  </body>
+</html>

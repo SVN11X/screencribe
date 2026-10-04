@@ -11,6 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,10 +19,20 @@ jobs:
           node-version: 22
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Check JavaScript syntax
-        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
-      - name: Check Python syntax
-        run: python -m compileall -q backend/app
-      - name: Check required files
-        run: test -f index.html && test -f backend/Dockerfile && test -f backend/app/main.py
+          python-version: "3.11"
+      - name: Check JavaScript and conversion planning
+        run: |
+          find src assets/vendor/ffmpeg assets/vendor/ffmpeg-core -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --test tests/*.test.mjs
+      - name: Install browser test tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Verify real capture and browser MP4 MP3 conversion
+        env:
+          SCREENCRIBE_PYTHON: python
+        run: node tests/browser.test.cjs
+      - name: Check required static files
+        run: test -f index.html && test -f src/capture-worker.js && test -f assets/vendor/ffmpeg/worker.js && test -f assets/vendor/ffmpeg-core/ffmpeg-core.wasm && test -f assets/vendor/ffmpeg-core/manifest.json

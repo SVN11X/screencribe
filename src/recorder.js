@@ -1,173 +1,309 @@
+import { outputSize } from './video-layout.js';
+
+// Capture to WebM first. FFmpeg produces MP4 after capture has finished.
 const VIDEO_MIME_CANDIDATES = [
+  'video/webm;codecs=vp8,opus',
+  'video/webm;codecs=vp9,opus',
+  'video/webm',
   'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
   'video/mp4',
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm',
 ];
 
-function chooseMimeType() {
-  return VIDEO_MIME_CANDIDATES.find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
-}
-
-function extensionForMime(mimeType) {
-  return mimeType.includes('mp4') ? 'mp4' : 'webm';
-}
-
-export class ScreenRecorder {
+export class ScreenRecorder extends EventTarget {
   #mediaRecorder = null;
   #displayStream = null;
   #microphoneStream = null;
   #mixedStream = null;
   #audioContext = null;
+  #worker = null;
+  #processorTrack = null;
+  #outputTrack = null;
   #chunks = [];
   #startedAt = 0;
+  #stoppedAt = 0;
   #pausedAt = 0;
   #totalPausedMs = 0;
+  #starting = false;
+  #stopping = false;
+  #lastHasAudio = false;
 
   get state() {
     return this.#mediaRecorder?.state ?? 'inactive';
   }
-
   get elapsedMs() {
     if (!this.#startedAt) return 0;
-    const now = this.state === 'paused' ? this.#pausedAt : performance.now();
-    return Math.max(0, now - this.#startedAt - this.#totalPausedMs);
+    const end = this.#stoppedAt || (this.state === 'paused' ? this.#pausedAt : performance.now());
+    return Math.max(0, end - this.#startedAt - this.#totalPausedMs);
+  }
+  #warn(message) {
+    this.dispatchEvent(new CustomEvent('warning', { detail: message }));
   }
 
-  async start({ includeMicrophone, includeSystemAudio }) {
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      throw new Error('Este navegador no permite capturar la pantalla mediante getDisplayMedia().');
+  async start({
+    includeMicrophone = true,
+    includeSystemAudio = true,
+    surface = 'browser',
+    quality = '1080',
+    frameRate = 30,
+  } = {}) {
+    if (this.#starting || this.state !== 'inactive' || this.#stopping)
+      throw new Error('Ya hay una captura en curso.');
+    if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === 'undefined') {
+      throw new Error(
+        'La captura de pantalla requiere un navegador compatible y HTTPS. Prueba Chrome o Edge en computador.',
+      );
     }
-    if (typeof MediaRecorder === 'undefined') {
-      throw new Error('Este navegador no permite grabar mediante MediaRecorder.');
-    }
-
-    this.#displayStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        frameRate: { ideal: 30, max: 60 },
-      },
-      audio: includeSystemAudio
-        ? {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          }
-        : false,
-      preferCurrentTab: false,
-      selfBrowserSurface: 'exclude',
-      surfaceSwitching: 'include',
-      systemAudio: includeSystemAudio ? 'include' : 'exclude',
-    });
-
+    this.#starting = true;
     try {
+      // Call before another await would lose the user's activation.
+      this.#displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: Number(frameRate), max: Number(frameRate) },
+          displaySurface: surface,
+        },
+        audio: includeSystemAudio
+          ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          : false,
+        preferCurrentTab: false,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+        systemAudio: includeSystemAudio ? 'include' : 'exclude',
+      });
+      const displayTrack = this.#displayStream.getVideoTracks()[0];
+      if (!displayTrack || displayTrack.readyState === 'ended')
+        throw new Error('La ventana dejó de compartirse. Vuelve a seleccionarla.');
+      displayTrack.contentHint = 'detail';
+      const warnings = [];
       if (includeMicrophone) {
-        this.#microphoneStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
-        });
+        try {
+          this.#microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: false,
+          });
+        } catch {
+          warnings.push('No se pudo acceder al micrófono. La captura continúa sin tu voz.');
+        }
       }
-
-      this.#mixedStream = await this.#composeStream();
-      const mimeType = chooseMimeType();
+      if (includeSystemAudio && !this.#displayStream.getAudioTracks().length) {
+        warnings.push(
+          'No se compartió audio. Para grabarlo, elige una pestaña y activa «Compartir audio» en el navegador.',
+        );
+      }
+      const dimensions = outputSize(displayTrack.getSettings(), quality);
+      const stableTrack = await this.#stabilizeVideo(displayTrack, dimensions);
+      const stabilized = stableTrack !== displayTrack;
+      if (!stabilized)
+        warnings.push(
+          'Este navegador no admite el ajuste estable del video. Usa Chrome o Edge para redimensionar la ventana durante la captura.',
+        );
+      if (displayTrack.readyState === 'ended')
+        throw new Error('La captura se cerró antes de iniciar.');
+      this.#mixedStream = await this.#composeStream(stableTrack);
+      const mimeType =
+        VIDEO_MIME_CANDIDATES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+      const pixels = dimensions.width * dimensions.height;
       const options = {
-        videoBitsPerSecond: 5_000_000,
-        audioBitsPerSecond: 160_000,
+        videoBitsPerSecond: Math.round(
+          Math.max(4_000_000, Math.min(20_000_000, pixels * 4)) * (Number(frameRate) / 30),
+        ),
+        audioBitsPerSecond: 192_000,
       };
       if (mimeType) options.mimeType = mimeType;
-
+      const mediaRecorder = new MediaRecorder(this.#mixedStream, options);
+      this.#mediaRecorder = mediaRecorder;
       this.#chunks = [];
-      this.#mediaRecorder = new MediaRecorder(this.#mixedStream, options);
-      this.#mediaRecorder.addEventListener('dataavailable', (event) => {
+      mediaRecorder.addEventListener('dataavailable', (event) => {
         if (event.data?.size) this.#chunks.push(event.data);
       });
-
       const stopped = new Promise((resolve, reject) => {
-        this.#mediaRecorder.addEventListener('stop', () => {
-          const finalType = this.#mediaRecorder?.mimeType || mimeType || 'video/webm';
-          const blob = new Blob(this.#chunks, { type: finalType });
-          resolve({ blob, mimeType: finalType, extension: extensionForMime(finalType) });
-        }, { once: true });
-        this.#mediaRecorder.addEventListener('error', (event) => {
-          reject(event.error ?? new Error('La grabación se interrumpió.'));
-        }, { once: true });
+        let recordingError = null;
+        mediaRecorder.addEventListener('error', (event) => {
+          recordingError = event.error || new Error('La grabación se interrumpió.');
+          this.#warn(
+            'El navegador interrumpió la captura. Se conservará el video recibido hasta ese momento.',
+          );
+        });
+        mediaRecorder.addEventListener(
+          'stop',
+          () => {
+            this.#freezeClock();
+            const finalType = mediaRecorder.mimeType || mimeType || 'video/webm';
+            const blob = new Blob(this.#chunks, { type: finalType });
+            this.#chunks = [];
+            this.#cleanupTracks();
+            this.#stopping = false;
+            if (!blob.size)
+              reject(
+                recordingError ||
+                  new Error(
+                    'La grabación está vacía. Mantén la ventana visible e inténtalo nuevamente.',
+                  ),
+              );
+            else
+              resolve({
+                blob,
+                mimeType: finalType,
+                extension: finalType.includes('mp4') ? 'mp4' : 'webm',
+                durationMs: this.elapsedMs,
+                hasAudio: this.#lastHasAudio,
+              });
+          },
+          { once: true },
+        );
       });
-
-      this.#displayStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        if (this.state !== 'inactive') this.stop();
-      });
-
+      displayTrack.addEventListener('ended', () => this.stop(), { once: true });
+      displayTrack.addEventListener('mute', () =>
+        this.#warn(
+          'La ventana dejó de enviar imagen. Mantén la ventana abierta y evita minimizarla; el sistema puede suspender la captura.',
+        ),
+      );
       this.#startedAt = performance.now();
+      this.#stoppedAt = 0;
       this.#pausedAt = 0;
       this.#totalPausedMs = 0;
-      this.#mediaRecorder.start(1000);
-      return { stopped, mimeType: this.#mediaRecorder.mimeType || mimeType || 'video/webm' };
+      this.#lastHasAudio = this.#mixedStream.getAudioTracks().length > 0;
+      mediaRecorder.start(1000);
+      return {
+        stopped,
+        stream: this.#mixedStream,
+        stabilized,
+        dimensions,
+        warnings,
+        hasAudio: this.#lastHasAudio,
+        surface: displayTrack.getSettings().displaySurface || surface,
+      };
     } catch (error) {
       this.#cleanupTracks();
       throw error;
+    } finally {
+      this.#starting = false;
     }
   }
 
   pause() {
-    if (this.state !== 'recording') return;
+    if (this.state !== 'recording' || this.#stopping) return;
     this.#mediaRecorder.pause();
     this.#pausedAt = performance.now();
   }
-
   resume() {
-    if (this.state !== 'paused') return;
+    if (this.state !== 'paused' || this.#stopping) return;
     this.#mediaRecorder.resume();
     this.#totalPausedMs += performance.now() - this.#pausedAt;
     this.#pausedAt = 0;
   }
-
+  #freezeClock() {
+    if (!this.#stoppedAt) this.#stoppedAt = this.#pausedAt || performance.now();
+  }
   stop() {
-    if (this.state === 'inactive') return;
+    if (this.state === 'inactive' || this.#stopping) return;
+    this.#freezeClock();
+    this.#stopping = true;
     this.#mediaRecorder.stop();
-    this.#cleanupTracks();
+    // Cleanup after MediaRecorder emits its final chunk and stop event.
   }
 
-  async #composeStream() {
-    const videoTracks = this.#displayStream.getVideoTracks();
-    const displayAudioTracks = this.#displayStream.getAudioTracks();
-    const microphoneAudioTracks = this.#microphoneStream?.getAudioTracks() ?? [];
+  async #stabilizeVideo(displayTrack, dimensions) {
+    if (
+      typeof MediaStreamTrackProcessor === 'undefined' ||
+      typeof MediaStreamTrackGenerator === 'undefined' ||
+      typeof Worker === 'undefined' ||
+      typeof OffscreenCanvas === 'undefined' ||
+      typeof VideoFrame === 'undefined'
+    )
+      return displayTrack;
+    try {
+      this.#processorTrack = displayTrack.clone();
+      const processor = new MediaStreamTrackProcessor({
+        track: this.#processorTrack,
+        maxBufferSize: 2,
+      });
+      this.#outputTrack = new MediaStreamTrackGenerator({ kind: 'video' });
+      this.#outputTrack.contentHint = 'detail';
+      const worker = new Worker(new URL('./capture-worker.js', import.meta.url), {
+        type: 'module',
+      });
+      this.#worker = worker;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error('El ajuste de video no respondió.')),
+          5000,
+        );
+        const finish = (error) => {
+          clearTimeout(timeout);
+          worker.removeEventListener('message', onMessage);
+          worker.removeEventListener('error', onError);
+          error ? reject(error) : resolve();
+        };
+        const onMessage = ({ data }) => {
+          if (data.type === 'ready') finish();
+          else if (data.type === 'error') finish(new Error(data.message));
+        };
+        const onError = () => finish(new Error('No se pudo iniciar el ajuste de video.'));
+        worker.addEventListener('message', onMessage);
+        worker.addEventListener('error', onError);
+        worker.postMessage(
+          {
+            type: 'start',
+            readable: processor.readable,
+            writable: this.#outputTrack.writable,
+            ...dimensions,
+          },
+          [processor.readable, this.#outputTrack.writable],
+        );
+      });
+      const interrupted = () => {
+        if (this.state !== 'inactive' && !this.#stopping) {
+          this.#warn(
+            'Se interrumpió el ajuste de video. Se guardará lo grabado hasta este momento.',
+          );
+          this.stop();
+        }
+      };
+      worker.addEventListener('message', ({ data }) => {
+        if (data.type === 'error' || data.type === 'ended') interrupted();
+      });
+      worker.addEventListener('error', interrupted);
+      return this.#outputTrack;
+    } catch {
+      this.#worker?.terminate();
+      this.#processorTrack?.stop();
+      this.#outputTrack?.stop();
+      this.#worker = null;
+      this.#processorTrack = null;
+      this.#outputTrack = null;
+      return displayTrack;
+    }
+  }
 
-    if (!displayAudioTracks.length && !microphoneAudioTracks.length) {
-      return new MediaStream(videoTracks);
-    }
-    if (!displayAudioTracks.length) {
-      return new MediaStream([...videoTracks, ...microphoneAudioTracks]);
-    }
-    if (!microphoneAudioTracks.length) {
-      return new MediaStream([...videoTracks, ...displayAudioTracks]);
-    }
-
+  async #composeStream(videoTrack) {
+    const displayAudio = this.#displayStream.getAudioTracks();
+    const micAudio = this.#microphoneStream?.getAudioTracks() || [];
+    if (!displayAudio.length || !micAudio.length)
+      return new MediaStream([videoTrack, ...displayAudio, ...micAudio]);
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.#audioContext = new AudioContextClass();
     await this.#audioContext.resume();
-
     const destination = this.#audioContext.createMediaStreamDestination();
-    const systemSource = this.#audioContext.createMediaStreamSource(
-      new MediaStream(displayAudioTracks),
-    );
-    const micSource = this.#audioContext.createMediaStreamSource(
-      new MediaStream(microphoneAudioTracks),
-    );
-
-    systemSource.connect(destination);
-    micSource.connect(destination);
-    return new MediaStream([...videoTracks, ...destination.stream.getAudioTracks()]);
+    // Two full-scale sources sum below 1.0, leaving headroom for the mix.
+    for (const tracks of [displayAudio, micAudio]) {
+      const source = this.#audioContext.createMediaStreamSource(new MediaStream(tracks));
+      const gain = this.#audioContext.createGain();
+      gain.gain.value = 0.45;
+      source.connect(gain).connect(destination);
+    }
+    return new MediaStream([videoTrack, ...destination.stream.getAudioTracks()]);
   }
 
   #cleanupTracks() {
-    for (const stream of [this.#displayStream, this.#microphoneStream, this.#mixedStream]) {
+    this.#worker?.terminate();
+    this.#processorTrack?.stop();
+    this.#outputTrack?.stop();
+    for (const stream of [this.#displayStream, this.#microphoneStream, this.#mixedStream])
       stream?.getTracks().forEach((track) => track.stop());
-    }
     this.#audioContext?.close().catch(() => undefined);
+    this.#worker = null;
+    this.#processorTrack = null;
+    this.#outputTrack = null;
     this.#displayStream = null;
     this.#microphoneStream = null;
     this.#mixedStream = null;
