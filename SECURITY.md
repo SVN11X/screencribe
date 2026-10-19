@@ -1,9 +1,7 @@
 # Seguridad
 
-Esta versión procesa videos y audios en el navegador. No requiere credenciales, backend ni tokens de Hugging Face.
+Esta versión procesa la captura en el navegador sin backend, credenciales ni motores descargables de conversión. Sirve el sitio mediante HTTPS o localhost y mantén actualizado el navegador.
 
-Conserva las versiones fijadas del motor de conversión y su wrapper; revisa los avisos del proyecto antes de actualizarlos. Sirve la página mediante HTTPS o localhost y mantén el navegador actualizado.
-
-Los archivos de usuario se leen en un worker y los mensajes de la interfaz se insertan como texto. No agregues código que envíe medios a servicios externos ni analítica sobre ellos.
+Los medios del usuario no se envían a servicios externos. Los nombres de archivos y mensajes se insertan como texto, y las URLs de descarga son locales. No agregues analítica de grabaciones ni cargas de código remoto.
 
 Reporta vulnerabilidades de forma privada al propietario del repositorio.

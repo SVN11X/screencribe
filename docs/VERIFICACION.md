@@ -1,42 +1,31 @@
 # Verificación de la entrega
 
-## Comprobaciones ejecutadas
+Comprobaciones ejecutadas el **7 de octubre de 2026** sobre la versión basada en `dd342d0` y los cambios incluidos en esta entrega.
 
-| Área                                                                                                                           | Resultado                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sintaxis JavaScript                                                                                                            | Sin errores en los módulos propios y los módulos incluidos del wrapper.                                                                                                         |
-| Geometría, utilidades y planificación                                                                                          | 7 pruebas Node pasan: encuadre sin distorsión, dimensiones pares y límites 4K/Full HD, rotación, formato, pistas silenciosas y carátulas de audio.                              |
-| Captura Chromium 153                                                                                                           | Un WebM real conserva 1280 × 720 en todos sus fotogramas aunque la fuente sintética pase por 640 × 480, 1920 × 1080 y 500 × 900.                                                |
-| Audio                                                                                                                          | La grabación incluye una sola pista que mezcla micrófono y sonido compartido.                                                                                                   |
-| Conversión local real                                                                                                          | FFmpeg.wasm en el navegador genera MP4 H.264/AAC y MP3 estéreo de 192 kbps a 44.1 kHz. Se descargan mediante URLs Blob y se inspeccionan con FFprobe nativo.                    |
-| Alojamiento estático                                                                                                           | La conversión funciona sin backend ni aislamiento (`crossOriginIsolated` es `false`), tanto en la raíz como bajo `/screencribe/`. La página de licencias abre con 19 fuentes.   |
-| Privacidad de red                                                                                                              | MP4 y MP3 funcionan con conexiones externas bloqueadas. Solo hay GET al mismo origen para la página y su núcleo incluido. No hay POST, subida de medios ni API de conversión.   |
-| Reutilización                                                                                                                  | Una segunda conversión WAV → MP3 funciona bloqueando nuevas cargas de los archivos del núcleo. La biblioteca se conserva durante la sesión.                                     |
-| Salida por fragmentos                                                                                                          | Se recoge un archivo de 3 MiB + 17 bytes como Blob en bloques y su SHA-256 coincide con la entrada. Se verifica la integridad al cruzar los límites de los bloques.             |
-| Entradas grandes                                                                                                               | MP4 válidos de 2 y 8 GiB se convierten a MP4 H.264. Contienen un clip breve y un átomo `free` con tamaño de 64 bits; comprueba lectura por fragmentos sin topes de 200 MB/2 GB. |
-| Video silencioso                                                                                                               | Una entrada WebM de 321 × 241 produce MP4 de 320 × 240, sin audio inventado, y explica por qué no hay MP3.                                                                      |
-| Cadencia                                                                                                                       | El MP4 mantiene timestamps variables y no duplica fotogramas hasta los 1000 fps que puede declarar un WebM de MediaRecorder; se limita a 60 fps.                                |
-| Cancelación                                                                                                                    | Se cancela durante la conversión y durante la carga automática de la biblioteca; se conservan el original y los controles. Se completa otra conversión después.                 |
-| Eliminación                                                                                                                    | Quitar resultados revoca los enlaces Blob; dejan de responder.                                                                                                                  |
-| Errores                                                                                                                        | Archivo dañado, tipo no permitido y núcleo incluido no disponible muestran mensajes y conservan el original.                                                                    |
-| Controles y permisos                                                                                                           | Pausa/reanudación, detención, reinicio, captura cancelada, micrófono denegado y captura directa sin estabilización verificados.                                                 |
-| Diseño                                                                                                                         | Sin desbordamiento horizontal a 320, 390, 768, 1024 y 1440 px. Revisión visual de escritorio, móvil y tema oscuro.                                                              |
-| Teclado                                                                                                                        | Pestañas del flujo seleccionables con flechas.                                                                                                                                  |
-| Accesibilidad automática                                                                                                       | Axe-core no detecta infracciones WCAG 2 A/AA y 2.1 A/AA en inicio, carga, tema oscuro, móvil y licencias. No sustituye una auditoría manual completa.                           |
-| La integridad SHA-256 de los dos binarios y los 19 archivos de fuentes coincide con `assets/vendor/ffmpeg-core/manifest.json`. |
+| Comprobación | Resultado |
+| --- | --- |
+| Sintaxis y selección de formatos | Sintaxis JavaScript correcta y **8 pruebas unitarias aprobadas**: proporciones, resolución, nombres, selección nativa, fallback si falla el inicio y conservación de bytes. |
+| Navegador | Regresión completa aprobada con **Chromium 138.0.7204.0 headless** y APIs reales de grabación. |
+| MP4 nativo | Descarga de un **MP4 H.264/Opus**, sin conversión. FFprobe identifica el contenedor, codecs, dimensiones y fotogramas. El navegador reproduce el archivo descargable. |
+| Captura con cambios de tamaño | Salida fija de **1280 × 720** ante una fuente sintética de 640 × 480, 1920 × 1080 y 500 × 900. Los timestamps de los fotogramas aumentan. |
+| Audio | Micrófono y audio compartido se mezclan en una pista; se obtiene además un **M4A con audio Opus** por un segundo MediaRecorder. La pausa/reanudación de ambos mantiene duraciones próximas. |
+| Descarga y red | **Cero solicitudes HTTP nuevas al pulsar los botones de descarga**. En toda la sesión de prueba no aparecen solicitudes a FFmpeg, `.wasm`, `vendor`, CDN ni terceros. |
+| Formato alternativo | Al simular que MP4 no está disponible, se descarga WebM real, identificado por FFprobe, con extensión y botón correctos. Se conserva el último fragmento al detener estando en pausa. |
+| Grabación sin audio | Archivo de video sin pista de audio; descarga de audio separado deshabilitada. |
+| Audio separado desactivado | El video sigue incluyendo su pista de audio. Se conserva al simular el fin de la fuente compartida. |
+| Importaciones | MP4 y MP3 de entrada y salida tienen el mismo SHA-256. Un WebM importado conserva su formato. Los archivos vacíos se rechazan. |
+| Permisos denegados | La interfaz muestra el error y mantiene disponible el archivo anterior. |
+| Presentación | Capturas de escritorio, móvil de 390 px y tema oscuro; sin desbordamiento horizontal en móvil. Navegación con teclado comprobada. |
+| Publicación estática | Se preparó el mismo conjunto de archivos del workflow de Pages: enlaces y módulos resuelven bajo una subruta. **88.188 bytes de archivos estáticos**, sin vendor ni WebAssembly. |
 
-## Alcance
+## Alcance y límites
 
-La captura usa `MediaRecorder`, workers, `OffscreenCanvas`, `VideoFrame` y generadores de pistas reales. Solo se simula la ventana de origen para variar sus dimensiones de forma reproducible. La conversión usa el núcleo WebAssembly real; FFmpeg nativo se utiliza únicamente para crear entradas de prueba e inspeccionar descargas.
+La fuente de pantalla se simula con un worker que entrega imágenes móviles y cambia de dimensiones. El audio de prueba usa tonos; `MediaRecorder`, Web Audio, el worker de estabilización, los codecs, los archivos y las descargas son reales. El selector de pantalla del sistema operativo y los permisos se simulan para automatizar la prueba.
 
-El navegador sin interfaz gráfica mantuvo `document.visibilityState` en `visible` al cambiar entre páginas de la prueba. **No se afirma haber probado una pestaña realmente oculta ni una ventana minimizada en Windows/macOS.** Comprueba esos casos en tu computador siguiendo `ACTUALIZACION.md`.
+El navegador de prueba no admite AAC ni MP3 como encoders nativos; produjo H.264/Opus en MP4 y Opus en M4A. No se presenta eso como H.264/AAC ni como audio MP3. La selección H.264/AAC se comprueba en las pruebas de preferencia y se utiliza solo cuando el navegador de destino la admite.
 
-Las pruebas usaron medios cortos. Los archivos de 2 y 8 GiB tienen relleno válido que FFmpeg puede saltar; **no equivale a convertir ese tamaño de contenido audiovisual ni prueba grabaciones de varias horas**. Confirma que no se copia toda la entrada a la memoria de WebAssembly y que la app permite superar 2 GB mediante WORKERFS. No se garantiza suficiente memoria ni rapidez para cualquier archivo grande, dispositivo móvil o grabación prolongada. No se ha publicado el cambio en GitHub Pages desde esta entrega.
+No se han probado sesiones de horas, falta de RAM, todos los reproductores externos, Safari, Firefox ni el selector de ventanas de Windows del usuario. La ausencia de un motor de conversión elimina su descarga y recodificación, pero no elimina el tiempo de escritura en disco de un archivo grande ni garantiza codecs universales.
 
-## Repetir las pruebas
+Los archivos siguen locales y los cambios **no se han publicado en GitHub Pages** desde esta entrega.
 
-```bash
-node --test tests/*.test.mjs
-```
-
-Para la regresión completa, instala las herramientas de desarrollo indicadas en `README.md` y ejecuta `node tests/browser.test.cjs`. La publicación y el uso de la página no requieren estas herramientas.
+Previsualizaciones: `docs/previews/escritorio.png`, `docs/previews/movil.png` y `docs/previews/tema-oscuro.png`.

@@ -7,11 +7,11 @@
     <meta name="theme-color" content="#f5f7f5" />
     <meta
       name="description"
-      content="Tu estudio de grabación en el navegador. Captura pantalla, ventana o pestaña, revisa el video y convierte a MP4 o MP3."
+      content="Tu estudio de grabación en el navegador. Captura pantalla, ventana o pestaña y descarga MP4 o WebM directamente, sin cargar librerías de conversión."
     />
     <title>Screencribe · Tu estudio de grabación</title>
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./assets/styles.css" />
+    <link rel="stylesheet" href="./assets/styles.css?v=native-1" />
   </head>
   <body>
     <a class="skip-link" href="#main">Saltar al contenido</a>
@@ -89,7 +89,7 @@
       <span class="topbar-label">ESTUDIO DE GRABACIÓN</span>
       <div class="topbar-actions">
         <span id="converterBadge" class="badge badge-success"
-          ><span class="status-dot"></span>Conversión local · Gratis</span
+          ><span class="status-dot"></span>Grabación nativa · Gratis</span
         >
         <button
           id="themeToggle"
@@ -115,7 +115,7 @@
             Graba una explicación, una clase o tu próxima gran idea.<br
               class="desktop-break"
             />
-            Revisa el resultado y llévalo a MP4 o MP3.
+            Revisa el resultado y descarga tu video directamente.
           </p>
         </div>
         <div class="hero-note">
@@ -123,7 +123,7 @@
           <div>
             <strong>Tú tienes el control</strong
             ><span
-              >Graba, convierte y descarga en tu equipo.<br />Tus archivos
+              >Graba, revisa y descarga en tu equipo.<br />Tus archivos
               permanecen contigo.</span
             >
           </div>
@@ -135,7 +135,7 @@
         ><span class="workflow-line"></span
         ><span id="reviewStep" class="workflow-step"><b>02</b> Revisa</span
         ><span class="workflow-line"></span
-        ><span id="exportStep" class="workflow-step"><b>03</b> Exporta</span>
+        ><span id="exportStep" class="workflow-step"><b>03</b> Descarga</span>
       </div>
 
       <section class="studio-grid" aria-label="Estudio de grabación">
@@ -239,7 +239,23 @@
                   type="checkbox"
                   checked
               /></label>
+              <label class="toggle-row">
+                <svg class="icon"><use href="#i-file" /></svg>
+                <span
+                  ><strong>Guardar audio aparte</strong
+                  ><small
+                    >Formato nativo: M4A, WebM u otro disponible</small
+                  ></span
+                >
+                <input
+                  id="saveAudioSeparately"
+                  class="switch"
+                  type="checkbox"
+                  checked
+                />
+              </label>
             </div>
+            <p id="nativeFormatHint" class="field-hint" role="status"></p>
             <button
               id="startRecording"
               class="button button-primary record-button"
@@ -262,7 +278,7 @@
           >
             <div class="section-heading">
               <h2>Trae tu archivo</h2>
-              <p>Convierte un video o un audio existente.</p>
+              <p>Revisa y descarga un archivo en su formato original.</p>
             </div>
             <div id="fileDrop" class="file-drop">
               <svg class="icon"><use href="#i-upload" /></svg
@@ -284,8 +300,8 @@
             <div class="import-note">
               <svg class="icon"><use href="#i-file" /></svg>
               <p>
-                Extrae el audio de un video a MP3 o convierte tu grabación a
-                MP4.
+                Los archivos cargados conservan su formato. Esta versión no
+                realiza conversiones ni extrae el audio de un video existente.
               </p>
             </div>
           </div>
@@ -400,7 +416,7 @@
         <div class="source-details">
           <strong id="sourceName"></strong><span id="sourceSize"></span>
         </div>
-        <span class="badge badge-success">Listo para exportar</span
+        <span class="badge badge-success">Listo para descargar</span
         ><button
           id="clearSource"
           class="icon-button"
@@ -416,116 +432,70 @@
         <div class="export-heading">
           <span class="step-number">03</span>
           <div>
-            <h2 id="exportTitle">Dale el formato que necesitas</h2>
+            <h2 id="exportTitle">Descarga tu grabación</h2>
             <p id="exportHint">
-              Convierte gratis en tu navegador. El motor está incluido en esta
-              página y se carga automáticamente, sin instalaciones.
+              MP4 cuando tu navegador lo permita; WebM como alternativa.
             </p>
           </div>
-          <button
-            id="downloadOriginal"
-            class="button button-secondary"
-            type="button"
-            disabled
-          >
-            <svg class="icon"><use href="#i-download" /></svg>Descargar original
-          </button>
         </div>
-        <fieldset class="format-field">
-          <legend class="sr-only">Formatos de salida</legend>
-          <div class="format-grid">
-            <label class="format-option"
-              ><input id="wantMp4" type="checkbox" checked /><span
-                class="format-icon"
-                >MP4</span
-              ><span class="format-copy"
-                ><strong>Video para compartir</strong
-                ><small
-                  >H.264 · Hasta 1080p · Compatible con tus dispositivos</small
-                ></span
-              ><span class="format-check"
-                ><svg class="icon"><use href="#i-check" /></svg></span></label
-            ><label class="format-option"
-              ><input id="wantMp3" type="checkbox" checked /><span
-                class="format-icon audio"
-                >MP3</span
-              ><span class="format-copy"
-                ><strong>Solo el audio</strong
-                ><small>192 kbps · Clases, voz y notas de audio</small></span
-              ><span class="format-check"
-                ><svg class="icon"><use href="#i-check" /></svg></span
-            ></label>
-          </div>
-        </fieldset>
+        <div class="format-grid">
+          <article class="native-download-card">
+            <div class="native-download-info">
+              <span id="videoFormat" class="format-icon">VIDEO</span>
+              <div class="format-copy">
+                <strong id="videoExportTitle">Tu video</strong>
+                <small id="videoExportInfo"
+                  >Detén la grabación o carga un archivo para
+                  descargarlo.</small
+                >
+              </div>
+            </div>
+            <button
+              id="downloadOriginal"
+              class="button button-primary"
+              type="button"
+              disabled
+            >
+              <svg class="icon"><use href="#i-download" /></svg>
+              <span id="downloadLabel">Descargar video</span>
+            </button>
+          </article>
+          <article class="native-download-card">
+            <div class="native-download-info">
+              <span id="audioFormat" class="format-icon audio">AUDIO</span>
+              <div class="format-copy">
+                <strong>Solo el audio</strong>
+                <small id="audioExportInfo"
+                  >Activa «Guardar audio aparte» antes de grabar.</small
+                >
+              </div>
+            </div>
+            <button
+              id="downloadAudio"
+              class="button button-secondary"
+              type="button"
+              disabled
+            >
+              <svg class="icon"><use href="#i-download" /></svg>
+              <span id="audioDownloadLabel">Descargar audio</span>
+            </button>
+          </article>
+        </div>
         <div class="export-actions">
           <p class="conversion-privacy">
-            <svg class="icon"><use href="#i-shield" /></svg
-            ><span id="privacyText"
-              >La conversión ocurre en tu navegador. Tu archivo no se envía a
-              ningún servidor.</span
+            <svg class="icon"><use href="#i-shield" /></svg>
+            <span
+              >Tu grabación permanece en tu equipo. Descárgala antes de cerrar o
+              recargar.</span
             >
           </p>
-          <button
-            id="cancelJob"
-            class="button button-secondary hidden"
-            type="button"
-          >
-            Cancelar conversión</button
-          ><button
-            id="processFile"
-            class="button button-primary"
-            type="button"
-            disabled
-          >
-            <span id="processLabel">Convertir en mi equipo</span
-            ><svg class="icon"><use href="#i-arrow" /></svg>
-          </button>
         </div>
-        <div
-          id="progressBox"
-          class="progress-box hidden"
-          role="status"
-          aria-live="polite"
-        >
-          <div class="progress-heading">
-            <strong id="progressTitle">Preparando…</strong
-            ><span id="progressPercent">0%</span>
-          </div>
-          <progress
-            id="progressBar"
-            max="100"
-            value="0"
-            aria-label="Progreso de conversión"
-          ></progress>
-          <p id="progressMessage"></p>
-        </div>
+        <p class="native-limit">
+          Los archivos se crean mientras grabas. No se convierte WebM a MP4 ni
+          se genera MP3 con un conversor en esta versión.
+        </p>
       </section>
 
-      <section
-        id="resultsSection"
-        class="panel results-card hidden"
-        aria-labelledby="resultsTitle"
-        tabindex="-1"
-      >
-        <div class="results-heading">
-          <span class="result-check"
-            ><svg class="icon"><use href="#i-check" /></svg
-          ></span>
-          <div>
-            <h2 id="resultsTitle">Listo. Ahora es tuyo.</h2>
-            <p>Descarga los archivos antes de cerrar o recargar esta página.</p>
-          </div>
-          <button
-            id="deleteResults"
-            class="button button-ghost button-small"
-            type="button"
-          >
-            Quitar resultados
-          </button>
-        </div>
-        <div id="downloadGrid" class="download-grid"></div>
-        <p id="resultWarnings" class="result-warnings hidden" role="status"></p>
-      </section>
       <div class="tips-row">
         <div>
           <svg class="icon"><use href="#i-check" /></svg
@@ -554,7 +524,7 @@
       <a class="brand footer-brand" href="./"
         >screencribe<span class="brand-dot">.</span></a
       ><span>Hecho para explicar, enseñar y compartir.</span
-      ><a href="./assets/vendor/ffmpeg-core/licenses.html">Licencias</a
+      ><a href="./LICENSE">Licencias</a
       ><a
         href="https://github.com/SVN11X/screencribe"
         target="_blank"
@@ -562,6 +532,6 @@
         >Código abierto <span aria-hidden="true">↗</span></a
       >
     </footer>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=native-1"></script>
   </body>
 </html>

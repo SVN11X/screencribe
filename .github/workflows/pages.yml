@@ -27,7 +27,7 @@ jobs:
       - name: Prepare static site
         run: |
           mkdir -p _site
-          cp index.html 404.html _site/
+          cp index.html 404.html LICENSE _site/
           cp -R assets src icons _site/
           touch _site/.nojekyll
 

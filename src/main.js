@@ -1,8 +1,14 @@
-import { LocalConverter } from './local-converter.js';
-import { downloadBlob, formatBytes, formatClock } from './exporters.js';
-import { ScreenRecorder } from './recorder.js';
+import {
+  downloadBlob,
+  formatBytes,
+  formatClock,
+} from './exporters.js?v=native-1';
+import {
+  extensionForMime,
+  supportedVideoMime,
+} from './recording-formats.js?v=native-1';
+import { ScreenRecorder } from './recorder.js?v=native-1';
 
-const $ = (id) => document.getElementById(id);
 const elements = Object.fromEntries(
   [
     'converterBadge',
@@ -15,6 +21,8 @@ const elements = Object.fromEntries(
     'frameRate',
     'includeMic',
     'includeSystemAudio',
+    'saveAudioSeparately',
+    'nativeFormatHint',
     'startRecording',
     'startLabel',
     'pauseRecording',
@@ -39,46 +47,37 @@ const elements = Object.fromEntries(
     'pausedOverlay',
     'expandPreview',
     'downloadOriginal',
-    'wantMp4',
-    'wantMp3',
-    'processFile',
-    'processLabel',
-    'cancelJob',
-    'progressBox',
-    'progressTitle',
-    'progressPercent',
-    'progressBar',
-    'progressMessage',
+    'downloadLabel',
+    'downloadAudio',
+    'audioDownloadLabel',
+    'videoFormat',
+    'videoExportTitle',
+    'videoExportInfo',
+    'audioFormat',
+    'audioExportInfo',
     'noticeBox',
     'errorBox',
-    'resultsSection',
-    'downloadGrid',
-    'resultWarnings',
-    'deleteResults',
-    'privacyText',
     'exportHint',
     'reviewStep',
     'exportStep',
-  ].map((id) => [id, $(id)]),
+  ].map((id) => [id, document.getElementById(id)]),
 );
 const recorder = new ScreenRecorder();
-const converter = new LocalConverter();
+const captureSupported = Boolean(
+  navigator.mediaDevices?.getDisplayMedia && globalThis.MediaRecorder,
+);
 const MEDIA_EXTENSIONS =
   /\.(webm|mp4|m4v|m4a|mp3|wav|ogg|oga|ogv|mov|mkv|aac|flac|opus|avi)$/i;
 const AUDIO_EXTENSIONS = /\.(m4a|mp3|wav|oga|aac|flac|opus)$/i;
 let selectedFile = null;
+let selectedAudioFile = null;
 let unsavedRecording = false;
-let sourceHasAudio = null;
+let unsavedAudio = false;
 let previewUrl = '';
 let timerHandle = null;
 let recording = false;
 let preparing = false;
-let converting = false;
-let conversionController = null;
-let resultJob = null;
-let resultUrls = [];
-let sourceDurationSeconds = 0;
-const undownloadedResults = new Set();
+let finishing = false;
 let notices = [];
 
 function hide(element, value = true) {
@@ -110,24 +109,35 @@ function badge(element, state, label) {
   dot.className = 'status-dot';
   element.replaceChildren(dot, document.createTextNode(label));
 }
-
+function isAudioFile(file) {
+  return Boolean(
+    file &&
+      (file.type.startsWith('audio/') || AUDIO_EXTENSIONS.test(file.name)),
+  );
+}
+function fileFormat(file) {
+  return (
+    file?.name.match(/\.([a-z0-9]+)$/i)?.[1] || extensionForMime(file?.type)
+  ).toUpperCase();
+}
 function updateUi() {
-  const locked = recording || preparing || converting;
-  elements.startRecording.disabled = locked;
+  const locked = recording || preparing || finishing;
+  elements.startRecording.disabled = locked || !captureSupported;
   elements.startLabel.textContent = preparing
     ? 'Preparando captura…'
-    : recording
-      ? 'Grabación en curso'
-      : converting
-        ? 'Conversión en curso'
+    : finishing
+      ? 'Guardando grabación…'
+      : recording
+        ? 'Grabación en curso'
         : 'Iniciar grabación';
-  elements.pauseRecording.disabled = !recording;
-  elements.stopRecording.disabled = !recording;
+  elements.pauseRecording.disabled = !recording || finishing;
+  elements.stopRecording.disabled = !recording || finishing;
   hide(elements.pauseRecording, !recording);
   hide(elements.stopRecording, !recording);
   for (const element of [
     elements.includeMic,
     elements.includeSystemAudio,
+    elements.saveAudioSeparately,
     elements.quality,
     elements.frameRate,
     elements.fileInput,
@@ -138,29 +148,55 @@ function updateUi() {
     element.disabled = locked;
   for (const input of document.querySelectorAll('input[name="surface"]'))
     input.disabled = locked;
-  elements.wantMp4.disabled =
-    locked || !selectedFile || isAudioFile(selectedFile);
-  elements.wantMp3.disabled =
-    locked || !selectedFile || sourceHasAudio === false;
-  const hasOutput =
-    (elements.wantMp4.checked && !elements.wantMp4.disabled) ||
-    (elements.wantMp3.checked && !elements.wantMp3.disabled);
-  elements.processFile.disabled =
-    locked || !selectedFile || !hasOutput || !converter.supported;
-  elements.processLabel.textContent = converting
-    ? 'Convirtiendo…'
-    : 'Convertir en mi equipo';
-  elements.downloadOriginal.disabled = !selectedFile || recording || preparing;
+  elements.downloadOriginal.disabled = !selectedFile || locked;
+  elements.downloadAudio.disabled = !selectedAudioFile || locked;
   elements.expandPreview.disabled = !selectedFile && !recording;
   elements.reviewStep.classList.toggle(
     'active',
     Boolean(selectedFile || recording),
   );
-  elements.exportStep.classList.toggle('active', Boolean(resultJob));
+  elements.exportStep.classList.toggle(
+    'active',
+    Boolean(selectedFile && !locked),
+  );
   elements.fileDrop.setAttribute('aria-disabled', String(locked));
+
+  const expected = supportedVideoMime(
+    elements.includeMic.checked || elements.includeSystemAudio.checked,
+  );
+  elements.nativeFormatHint.textContent = expected.startsWith('video/mp4')
+    ? 'MP4 directo disponible. El formato final depende de los recursos del navegador.'
+    : 'Este navegador grabará en su formato nativo, normalmente WebM. MP4 directo no está disponible.';
+  const audioOnly = isAudioFile(selectedFile);
+  const format = selectedFile ? fileFormat(selectedFile) : 'VIDEO';
+  elements.videoFormat.textContent = format;
+  elements.videoExportTitle.textContent = audioOnly
+    ? 'Tu archivo de audio'
+    : 'Tu video';
+  elements.videoExportInfo.textContent = selectedFile
+    ? `${formatBytes(selectedFile.size)} · Conserva el formato y la calidad originales`
+    : 'Detén la grabación o carga un archivo para descargarlo.';
+  elements.downloadLabel.textContent = selectedFile
+    ? `Descargar ${format}`
+    : 'Descargar video';
+  const audioFormat = selectedAudioFile
+    ? fileFormat(selectedAudioFile)
+    : 'AUDIO';
+  elements.audioFormat.textContent = audioFormat;
+  elements.audioDownloadLabel.textContent = selectedAudioFile
+    ? `Descargar audio ${audioFormat}`
+    : 'Descargar audio';
+  elements.audioExportInfo.textContent = selectedAudioFile
+    ? `${formatBytes(selectedAudioFile.size)} · Grabado por separado, listo para descargar`
+    : audioOnly
+      ? 'Usa la descarga del archivo de audio a la izquierda.'
+      : 'Activa «Guardar audio aparte» antes de grabar. No se convierte a MP3.';
+  elements.exportHint.textContent = selectedFile
+    ? 'Tu archivo está listo. La descarga conserva sus bytes, sin conversiones ni cargas adicionales.'
+    : 'MP4 cuando tu navegador lo permita; WebM como alternativa. Los archivos se crean mientras grabas.';
 }
 function setMode(mode) {
-  if (recording || preparing || converting) return;
+  if (recording || preparing || finishing) return;
   const isRecord = mode === 'record';
   for (const [tab, active] of [
     [elements.recordTab, isRecord],
@@ -172,46 +208,34 @@ function setMode(mode) {
   hide(elements.recordPanel, !isRecord);
   hide(elements.uploadPanel, isRecord);
 }
-function isAudioFile(file) {
-  return (
-    file && (file.type.startsWith('audio/') || AUDIO_EXTENSIONS.test(file.name))
-  );
-}
 function revokePreview() {
-  elements.videoPreview.onloadedmetadata = null;
-  elements.audioPreview.onloadedmetadata = null;
-  elements.videoPreview.onerror = null;
-  elements.audioPreview.onerror = null;
-  elements.videoPreview.pause();
-  elements.audioPreview.pause();
+  for (const media of [elements.videoPreview, elements.audioPreview]) {
+    media.onloadedmetadata = null;
+    media.onerror = null;
+    media.pause();
+    media.removeAttribute('src');
+  }
   elements.videoPreview.srcObject = null;
-  elements.videoPreview.removeAttribute('src');
-  elements.audioPreview.removeAttribute('src');
   elements.videoPreview.load();
   elements.audioPreview.load();
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = '';
 }
-function resetResults() {
-  resultUrls.forEach((url) => URL.revokeObjectURL(url));
-  resultUrls = [];
-  undownloadedResults.clear();
-  hide(elements.resultsSection);
-  elements.downloadGrid.replaceChildren();
-  resultJob = null;
-}
 function setSelectedFile(
   file,
-  { durationMs = null, hasAudio = null, fromRecording = false } = {},
+  {
+    durationMs = null,
+    fromRecording = false,
+    audioFile = null,
+    audioNeedsSaving = fromRecording,
+  } = {},
 ) {
   revokePreview();
   selectedFile = file;
-  sourceHasAudio = hasAudio;
-  sourceDurationSeconds = Math.max(0, Number(durationMs) || 0) / 1000;
+  selectedAudioFile = audioFile;
   unsavedRecording = Boolean(file && fromRecording);
+  unsavedAudio = Boolean(audioFile && audioNeedsSaving);
   clearError();
-  resetResults();
-  hide(elements.progressBox);
   hide(elements.sourceInfo, !file);
   hide(elements.pausedOverlay);
   if (!file) {
@@ -228,21 +252,10 @@ function setSelectedFile(
     updateUi();
     return;
   }
-  elements.sourceName.textContent = file.name;
-  elements.sourceSize.textContent = `${formatBytes(file.size)} · ${isAudioFile(file) ? 'Audio' : 'Video'}`;
-  previewUrl = URL.createObjectURL(file);
   const audioOnly = isAudioFile(file);
-  if (audioOnly) {
-    elements.wantMp4.checked = false;
-    elements.wantMp3.checked = true;
-  } else {
-    elements.wantMp4.checked = true;
-    elements.wantMp3.checked = hasAudio !== false;
-  }
-  if (hasAudio === false)
-    addNotice(
-      'Esta grabación no tiene pista de audio. Puedes descargar el video original o convertirlo a MP4.',
-    );
+  elements.sourceName.textContent = file.name;
+  elements.sourceSize.textContent = `${formatBytes(file.size)} · ${audioOnly ? 'Audio' : 'Video'} ${fileFormat(file)}`;
+  previewUrl = URL.createObjectURL(file);
   hide(elements.previewPlaceholder);
   hide(elements.videoPreview, audioOnly);
   hide(elements.audioStage, !audioOnly);
@@ -253,52 +266,47 @@ function setSelectedFile(
   }
   media.src = previewUrl;
   elements.previewTitle.textContent = 'Revisa antes de compartir';
-  elements.captureMeta.textContent = `${audioOnly ? 'Audio' : 'Video'} · ${formatBytes(file.size)}`;
+  elements.captureMeta.textContent = `${audioOnly ? 'Audio' : 'Video'} ${fileFormat(file)} · ${formatBytes(file.size)}`;
   elements.recordingTimer.textContent =
     durationMs != null ? formatClock(durationMs) : '00:00:00';
-  badge(elements.recordingStatus, 'success', 'Listo');
+  badge(elements.recordingStatus, 'success', 'Listo para descargar');
   media.onloadedmetadata = () => {
-    if (selectedFile !== file) return;
-    if (Number.isFinite(media.duration)) {
-      sourceDurationSeconds = media.duration;
+    if (selectedFile === file && Number.isFinite(media.duration))
       elements.recordingTimer.textContent = formatClock(media.duration * 1000);
-    }
   };
   media.onerror = () => {
     if (selectedFile === file)
       addNotice(
-        'El navegador no puede previsualizar este formato. Puedes descargar el original o intentar convertirlo.',
+        'El navegador no puede previsualizar este formato. Puedes descargar el archivo original.',
       );
   };
   updateUi();
 }
 function acceptFile(file) {
-  if (recording || preparing || converting || !file) return;
+  if (recording || preparing || finishing || !file) return;
   clearError();
   clearNotices();
-  if (!file.size) {
-    showError('El archivo está vacío. Selecciona otro.');
-    return;
-  }
+  if (!file.size) return showError('El archivo está vacío. Selecciona otro.');
   if (
     !file.type.startsWith('video/') &&
     !file.type.startsWith('audio/') &&
     !MEDIA_EXTENSIONS.test(file.name)
-  ) {
-    showError(
+  )
+    return showError(
       'Selecciona un archivo de video o audio, como MP4, WebM, MOV, MP3 o WAV.',
     );
-    return;
-  }
   setMode('upload');
   setSelectedFile(file);
+  addNotice(
+    'Los archivos cargados conservan su formato. Esta versión no convierte WebM a MP4 ni extrae MP3.',
+  );
 }
 function stopTimer() {
   clearInterval(timerHandle);
   timerHandle = null;
 }
 async function beginRecording() {
-  if (recording || preparing || converting) return;
+  if (recording || preparing || finishing) return;
   clearError();
   clearNotices();
   preparing = true;
@@ -307,6 +315,7 @@ async function beginRecording() {
     const session = await recorder.start({
       includeMicrophone: elements.includeMic.checked,
       includeSystemAudio: elements.includeSystemAudio.checked,
+      saveAudioSeparately: elements.saveAudioSeparately.checked,
       surface: document.querySelector('input[name="surface"]:checked').value,
       quality: elements.quality.value,
       frameRate: Number(elements.frameRate.value),
@@ -314,9 +323,7 @@ async function beginRecording() {
     preparing = false;
     recording = true;
     revokePreview();
-    resetResults();
     hide(elements.sourceInfo);
-    hide(elements.progressBox);
     hide(elements.previewPlaceholder);
     hide(elements.audioStage);
     hide(elements.videoPreview, false);
@@ -333,7 +340,12 @@ async function beginRecording() {
       { browser: 'Pestaña', window: 'Ventana', monitor: 'Pantalla' }[
         session.surface
       ] || 'Captura';
-    elements.captureMeta.textContent = `${surface} · ${session.stabilized ? `${session.dimensions.width} × ${session.dimensions.height}` : 'Captura directa'}`;
+    const format = extensionForMime(session.mimeType).toUpperCase();
+    elements.captureMeta.textContent = `${surface} · ${
+      session.stabilized
+        ? `${session.dimensions.width} × ${session.dimensions.height}`
+        : 'Captura directa'
+    } · ${format}`;
     badge(elements.recordingStatus, 'recording', 'Grabando');
     elements.timerDot.className = 'timer-dot recording';
     elements.pauseRecording.textContent = 'Pausar';
@@ -345,23 +357,45 @@ async function beginRecording() {
     session.warnings.forEach(addNotice);
     updateUi();
     session.stopped
-      .then(({ blob, extension, durationMs, hasAudio }) => {
+      .then(({ blob, extension, durationMs, hasAudio, audio }) => {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         recording = false;
+        finishing = false;
         setSelectedFile(
           new File([blob], `screencribe-${timestamp}.${extension}`, {
             type: blob.type,
           }),
-          { durationMs, hasAudio, fromRecording: true },
+          {
+            durationMs,
+            fromRecording: true,
+            audioFile: audio
+              ? new File(
+                  [audio.blob],
+                  `screencribe-${timestamp}-audio.${audio.extension}`,
+                  { type: audio.blob.type },
+                )
+              : null,
+          },
         );
+        if (!hasAudio)
+          addNotice(
+            'Esta grabación no tiene pista de audio. El video está listo para descargar.',
+          );
       })
       .catch((error) => {
         recording = false;
-        setSelectedFile(selectedFile);
+        finishing = false;
+        // A previous completed recording remains available if this capture failed.
+        setSelectedFile(selectedFile, {
+          fromRecording: unsavedRecording,
+          audioFile: selectedAudioFile,
+          audioNeedsSaving: unsavedAudio,
+        });
         showError(error.message || 'No se pudo completar la grabación.');
       })
       .finally(() => {
         recording = false;
+        finishing = false;
         stopTimer();
         elements.timerDot.className = 'timer-dot';
         hide(elements.pausedOverlay);
@@ -378,6 +412,7 @@ async function beginRecording() {
   }
 }
 function togglePause() {
+  if (finishing) return;
   const pause = recorder.state === 'recording';
   if (pause) recorder.pause();
   else recorder.resume();
@@ -389,120 +424,6 @@ function togglePause() {
     pause ? 'En pausa' : 'Grabando',
   );
   hide(elements.pausedOverlay, !pause);
-}
-function updateProgress(value, title, message) {
-  hide(elements.progressBox, false);
-  if (value == null) {
-    elements.progressBar.removeAttribute('value');
-    elements.progressPercent.textContent = 'En curso';
-  } else {
-    const progress = Math.max(0, Math.min(100, Number(value) || 0));
-    elements.progressBar.value = progress;
-    elements.progressPercent.textContent = `${Math.round(progress)}%`;
-  }
-  elements.progressTitle.textContent = title;
-  elements.progressMessage.textContent = message;
-}
-async function processSelectedFile() {
-  if (!selectedFile || converting || recording || preparing) return;
-  const options = {
-    createMp4: elements.wantMp4.checked && !elements.wantMp4.disabled,
-    createMp3: elements.wantMp3.checked && !elements.wantMp3.disabled,
-  };
-  if (!options.createMp4 && !options.createMp3) return;
-  clearError();
-  resetResults();
-  converting = true;
-  conversionController = new AbortController();
-  const controller = conversionController;
-  hide(elements.cancelJob, false);
-  badge(elements.converterBadge, 'neutral', 'Convirtiendo en tu equipo');
-  updateUi();
-  try {
-    const result = await converter.convert(selectedFile, options, {
-      signal: controller.signal,
-      durationSeconds: sourceDurationSeconds,
-      onProgress: ({ percent, title, message }) =>
-        updateProgress(percent, title, message),
-    });
-    renderResults(result);
-  } catch (error) {
-    if (controller.signal.aborted || error.name === 'AbortError')
-      updateProgress(
-        0,
-        'Conversión cancelada',
-        'Tu archivo original sigue disponible.',
-      );
-    else {
-      updateProgress(
-        0,
-        'No se completó la conversión',
-        'Tu archivo original sigue disponible. Puedes volver a intentarlo.',
-      );
-      showError(error.message || 'No se pudo convertir el archivo.');
-    }
-  } finally {
-    converting = false;
-    conversionController = null;
-    badge(elements.converterBadge, 'success', 'Conversión local · Gratis');
-    hide(elements.cancelJob);
-    updateUi();
-  }
-}
-function icon(symbol, className = 'icon') {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', className);
-  svg.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', `#${symbol}`);
-  svg.append(use);
-  return svg;
-}
-function renderResults(job) {
-  resultJob = job;
-  elements.downloadGrid.replaceChildren();
-  for (const artifact of job.artifacts || []) {
-    if (!['mp4', 'mp3'].includes(artifact.name)) continue;
-    const card = document.createElement('article');
-    card.className = 'download-card';
-    const type = document.createElement('span');
-    type.className = `format-icon ${artifact.name === 'mp3' ? 'audio' : ''}`;
-    type.textContent = artifact.name.toUpperCase();
-    const copy = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent =
-      artifact.name === 'mp4' ? 'Tu video en MP4' : 'Tu audio en MP3';
-    const size = document.createElement('small');
-    size.textContent = `${formatBytes(artifact.size)} · Listo para descargar`;
-    copy.append(title, size);
-    const link = document.createElement('a');
-    link.className = 'button button-primary button-small';
-    link.href = URL.createObjectURL(artifact.blob);
-    resultUrls.push(link.href);
-    undownloadedResults.add(artifact.name);
-    link.addEventListener('click', () =>
-      undownloadedResults.delete(artifact.name),
-    );
-    link.setAttribute('download', artifact.filename);
-    link.setAttribute('aria-label', `Descargar ${artifact.name.toUpperCase()}`);
-    link.append(icon('i-download'), document.createTextNode('Descargar'));
-    card.append(type, copy, link);
-    elements.downloadGrid.append(card);
-  }
-  elements.resultWarnings.textContent = (job.warnings || []).join(' ');
-  hide(elements.resultWarnings, !job.warnings?.length);
-  hide(elements.resultsSection, false);
-  elements.resultsSection.focus({ preventScroll: true });
-  elements.resultsSection.scrollIntoView({
-    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'instant'
-      : 'smooth',
-    block: 'nearest',
-  });
-  updateUi();
-}
-function cancelConversion() {
-  conversionController?.abort();
 }
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -551,8 +472,9 @@ for (const tab of [elements.recordTab, elements.uploadTab])
 elements.startRecording.addEventListener('click', beginRecording);
 elements.pauseRecording.addEventListener('click', togglePause);
 elements.stopRecording.addEventListener('click', () => {
-  elements.stopRecording.disabled = true;
-  elements.pauseRecording.disabled = true;
+  finishing = true;
+  badge(elements.recordingStatus, 'neutral', 'Guardando…');
+  updateUi();
   recorder.stop();
 });
 elements.fileInput.addEventListener('change', () => {
@@ -562,7 +484,7 @@ elements.fileInput.addEventListener('change', () => {
 for (const name of ['dragenter', 'dragover'])
   elements.fileDrop.addEventListener(name, (event) => {
     event.preventDefault();
-    if (!recording && !preparing && !converting)
+    if (!recording && !preparing && !finishing)
       elements.fileDrop.classList.add('dragging');
   });
 elements.fileDrop.addEventListener('dragleave', () =>
@@ -573,12 +495,10 @@ elements.fileDrop.addEventListener('drop', (event) => {
   elements.fileDrop.classList.remove('dragging');
   acceptFile(event.dataTransfer.files?.[0]);
 });
-window.addEventListener('dragover', (event) => {
-  if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
-});
-window.addEventListener('drop', (event) => {
-  if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
-});
+for (const name of ['dragover', 'drop'])
+  window.addEventListener(name, (event) => {
+    if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  });
 elements.clearSource.addEventListener('click', () => {
   clearNotices();
   setSelectedFile(null);
@@ -589,6 +509,14 @@ elements.downloadOriginal.addEventListener('click', () => {
     unsavedRecording = false;
   }
 });
+elements.downloadAudio.addEventListener('click', () => {
+  if (selectedAudioFile) {
+    downloadBlob(selectedAudioFile.name, selectedAudioFile);
+    unsavedAudio = false;
+  }
+});
+for (const checkbox of [elements.includeMic, elements.includeSystemAudio])
+  checkbox.addEventListener('change', updateUi);
 elements.expandPreview.addEventListener('click', async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -597,57 +525,27 @@ elements.expandPreview.addEventListener('click', async () => {
     addNotice('Este navegador no permite ampliar la vista previa.');
   }
 });
-elements.processFile.addEventListener('click', processSelectedFile);
-elements.cancelJob.addEventListener('click', cancelConversion);
-for (const checkbox of [elements.wantMp4, elements.wantMp3])
-  checkbox.addEventListener('change', updateUi);
-elements.deleteResults.addEventListener('click', () => {
-  resetResults();
-  hide(elements.progressBox);
-  addNotice(
-    'Se liberaron los resultados de esta página. Tu archivo original sigue disponible.',
-  );
-  updateUi();
-});
 recorder.addEventListener('warning', (event) => addNotice(event.detail));
 window.addEventListener('beforeunload', (event) => {
-  if (
-    recording ||
-    preparing ||
-    converting ||
-    unsavedRecording ||
-    undownloadedResults.size
-  ) {
+  if (recording || preparing || finishing || unsavedRecording || unsavedAudio) {
     event.preventDefault();
     event.returnValue = '';
   }
 });
 window.addEventListener('pagehide', () => {
   if (recorder.state !== 'inactive') recorder.stop();
+  stopTimer();
   revokePreview();
-  resetResults();
-  converter.dispose();
+  selectedFile = null;
+  selectedAudioFile = null;
 });
-if (
-  !navigator.mediaDevices?.getDisplayMedia ||
-  typeof MediaRecorder === 'undefined'
-) {
+if (!captureSupported) {
   setMode('upload');
   addNotice(
-    'Este navegador permite cargar y convertir archivos. Para capturar pantalla, usa Chrome o Edge en computador mediante HTTPS.',
+    'Para capturar pantalla, usa un navegador compatible en computador mediante HTTPS. Puedes previsualizar archivos y descargarlos en su formato original.',
   );
 }
 elements.uploadLimit.textContent =
   'Sin tope fijo de tamaño. Sujeto a memoria disponible.';
-badge(
-  elements.converterBadge,
-  converter.supported ? 'success' : 'warning',
-  converter.supported
-    ? 'Conversión local · Gratis'
-    : 'Conversión no compatible',
-);
-if (!converter.supported)
-  addNotice(
-    'Este navegador permite descargar el original, pero no admite la conversión local. Usa una versión actual de Chrome, Edge o Firefox.',
-  );
+badge(elements.converterBadge, 'success', 'Grabación nativa · Gratis');
 updateUi();

@@ -1,16 +1,15 @@
-import { outputSize } from './video-layout.js';
-
-// Capture to WebM first. FFmpeg produces MP4 after capture has finished.
-const VIDEO_MIME_CANDIDATES = [
-  'video/webm;codecs=vp8,opus',
-  'video/webm;codecs=vp9,opus',
-  'video/webm',
-  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-  'video/mp4',
-];
+import { outputSize } from './video-layout.js?v=native-1';
+import {
+  AUDIO_MIME_CANDIDATES,
+  extensionForMime,
+  recordedBlob,
+  startNativeRecorder,
+  videoMimeCandidates,
+} from './recording-formats.js?v=native-1';
 
 export class ScreenRecorder extends EventTarget {
   #mediaRecorder = null;
+  #audioRecorder = null;
   #displayStream = null;
   #microphoneStream = null;
   #mixedStream = null;
@@ -32,7 +31,9 @@ export class ScreenRecorder extends EventTarget {
   }
   get elapsedMs() {
     if (!this.#startedAt) return 0;
-    const end = this.#stoppedAt || (this.state === 'paused' ? this.#pausedAt : performance.now());
+    const end =
+      this.#stoppedAt ||
+      (this.state === 'paused' ? this.#pausedAt : performance.now());
     return Math.max(0, end - this.#startedAt - this.#totalPausedMs);
   }
   #warn(message) {
@@ -45,10 +46,14 @@ export class ScreenRecorder extends EventTarget {
     surface = 'browser',
     quality = '1080',
     frameRate = 30,
+    saveAudioSeparately = true,
   } = {}) {
     if (this.#starting || this.state !== 'inactive' || this.#stopping)
       throw new Error('Ya hay una captura en curso.');
-    if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === 'undefined') {
+    if (
+      !navigator.mediaDevices?.getDisplayMedia ||
+      typeof MediaRecorder === 'undefined'
+    ) {
       throw new Error(
         'La captura de pantalla requiere un navegador compatible y HTTPS. Prueba Chrome o Edge en computador.',
       );
@@ -62,7 +67,11 @@ export class ScreenRecorder extends EventTarget {
           displaySurface: surface,
         },
         audio: includeSystemAudio
-          ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            }
           : false,
         preferCurrentTab: false,
         selfBrowserSurface: 'exclude',
@@ -71,17 +80,25 @@ export class ScreenRecorder extends EventTarget {
       });
       const displayTrack = this.#displayStream.getVideoTracks()[0];
       if (!displayTrack || displayTrack.readyState === 'ended')
-        throw new Error('La ventana dejó de compartirse. Vuelve a seleccionarla.');
+        throw new Error(
+          'La ventana dejó de compartirse. Vuelve a seleccionarla.',
+        );
       displayTrack.contentHint = 'detail';
       const warnings = [];
       if (includeMicrophone) {
         try {
           this.#microphoneStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
             video: false,
           });
         } catch {
-          warnings.push('No se pudo acceder al micrófono. La captura continúa sin tu voz.');
+          warnings.push(
+            'No se pudo acceder al micrófono. La captura continúa sin tu voz.',
+          );
         }
       }
       if (includeSystemAudio && !this.#displayStream.getAudioTracks().length) {
@@ -99,70 +116,85 @@ export class ScreenRecorder extends EventTarget {
       if (displayTrack.readyState === 'ended')
         throw new Error('La captura se cerró antes de iniciar.');
       this.#mixedStream = await this.#composeStream(stableTrack);
-      const mimeType =
-        VIDEO_MIME_CANDIDATES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
       const pixels = dimensions.width * dimensions.height;
       const options = {
         videoBitsPerSecond: Math.round(
-          Math.max(4_000_000, Math.min(20_000_000, pixels * 4)) * (Number(frameRate) / 30),
+          Math.max(4_000_000, Math.min(20_000_000, pixels * 4)) *
+            (Number(frameRate) / 30),
         ),
         audioBitsPerSecond: 192_000,
       };
-      if (mimeType) options.mimeType = mimeType;
-      const mediaRecorder = new MediaRecorder(this.#mixedStream, options);
-      this.#mediaRecorder = mediaRecorder;
       this.#chunks = [];
-      mediaRecorder.addEventListener('dataavailable', (event) => {
-        if (event.data?.size) this.#chunks.push(event.data);
-      });
+      this.#lastHasAudio = this.#mixedStream.getAudioTracks().length > 0;
+      let audioStopped = Promise.resolve(null);
+      let resolveStopped;
+      let rejectStopped;
       const stopped = new Promise((resolve, reject) => {
-        let recordingError = null;
-        mediaRecorder.addEventListener('error', (event) => {
-          recordingError = event.error || new Error('La grabación se interrumpió.');
-          this.#warn(
-            'El navegador interrumpió la captura. Se conservará el video recibido hasta ese momento.',
-          );
-        });
-        mediaRecorder.addEventListener(
-          'stop',
-          () => {
+        resolveStopped = resolve;
+        rejectStopped = reject;
+      });
+      let recordingError = null;
+      this.#startedAt = performance.now();
+      this.#stoppedAt = 0;
+      this.#pausedAt = 0;
+      this.#totalPausedMs = 0;
+      const mediaRecorder = startNativeRecorder(
+        this.#mixedStream,
+        options,
+        videoMimeCandidates(this.#lastHasAudio),
+        {
+          dataavailable: (event) => {
+            if (event.data?.size) this.#chunks.push(event.data);
+          },
+          error: (event) => {
+            recordingError =
+              event.error || new Error('La grabación se interrumpió.');
+            this.#warn(
+              'El navegador interrumpió la captura. Se conservará el video recibido hasta ese momento.',
+            );
+          },
+          stop: async (event) => {
             this.#freezeClock();
-            const finalType = mediaRecorder.mimeType || mimeType || 'video/webm';
-            const blob = new Blob(this.#chunks, { type: finalType });
+            if (this.#audioRecorder?.state !== 'inactive')
+              this.#audioRecorder?.stop();
+            const blob = recordedBlob(event.target, this.#chunks);
             this.#chunks = [];
+            // Preserve both final chunks before releasing the shared audio tracks.
+            const audio = await audioStopped;
             this.#cleanupTracks();
             this.#stopping = false;
             if (!blob.size)
-              reject(
+              rejectStopped(
                 recordingError ||
                   new Error(
                     'La grabación está vacía. Mantén la ventana visible e inténtalo nuevamente.',
                   ),
               );
             else
-              resolve({
+              resolveStopped({
                 blob,
-                mimeType: finalType,
-                extension: finalType.includes('mp4') ? 'mp4' : 'webm',
+                mimeType: blob.type,
+                extension: extensionForMime(blob.type),
                 durationMs: this.elapsedMs,
                 hasAudio: this.#lastHasAudio,
+                audio,
               });
           },
-          { once: true },
+        },
+      );
+      this.#mediaRecorder = mediaRecorder;
+      if (saveAudioSeparately && this.#lastHasAudio)
+        audioStopped = this.#startAudioRecording(warnings);
+      if (!mediaRecorder.mimeType.toLowerCase().startsWith('video/mp4'))
+        warnings.push(
+          'Esta captura se guardará en el formato nativo del navegador. Si es WebM, se descargará como WebM. Para obtener MP4 directo, usa un navegador y equipo que admitan ese formato.',
         );
-      });
       displayTrack.addEventListener('ended', () => this.stop(), { once: true });
       displayTrack.addEventListener('mute', () =>
         this.#warn(
           'La ventana dejó de enviar imagen. Mantén la ventana abierta y evita minimizarla; el sistema puede suspender la captura.',
         ),
       );
-      this.#startedAt = performance.now();
-      this.#stoppedAt = 0;
-      this.#pausedAt = 0;
-      this.#totalPausedMs = 0;
-      this.#lastHasAudio = this.#mixedStream.getAudioTracks().length > 0;
-      mediaRecorder.start(1000);
       return {
         stopped,
         stream: this.#mixedStream,
@@ -170,6 +202,7 @@ export class ScreenRecorder extends EventTarget {
         dimensions,
         warnings,
         hasAudio: this.#lastHasAudio,
+        mimeType: mediaRecorder.mimeType,
         surface: displayTrack.getSettings().displaySurface || surface,
       };
     } catch (error) {
@@ -183,11 +216,13 @@ export class ScreenRecorder extends EventTarget {
   pause() {
     if (this.state !== 'recording' || this.#stopping) return;
     this.#mediaRecorder.pause();
+    if (this.#audioRecorder?.state === 'recording') this.#audioRecorder.pause();
     this.#pausedAt = performance.now();
   }
   resume() {
     if (this.state !== 'paused' || this.#stopping) return;
     this.#mediaRecorder.resume();
+    if (this.#audioRecorder?.state === 'paused') this.#audioRecorder.resume();
     this.#totalPausedMs += performance.now() - this.#pausedAt;
     this.#pausedAt = 0;
   }
@@ -199,7 +234,53 @@ export class ScreenRecorder extends EventTarget {
     this.#freezeClock();
     this.#stopping = true;
     this.#mediaRecorder.stop();
-    // Cleanup after MediaRecorder emits its final chunk and stop event.
+    if (this.#audioRecorder && this.#audioRecorder.state !== 'inactive')
+      this.#audioRecorder.stop();
+    // Cleanup after BOTH MediaRecorders emit their final chunks and stop events.
+  }
+
+  #startAudioRecording(warnings) {
+    const chunks = [];
+    let finish;
+    const stopped = new Promise((resolve) => {
+      finish = resolve;
+    });
+    try {
+      this.#audioRecorder = startNativeRecorder(
+        new MediaStream(this.#mixedStream.getAudioTracks()),
+        { audioBitsPerSecond: 192_000 },
+        AUDIO_MIME_CANDIDATES,
+        {
+          dataavailable: (event) => {
+            if (event.data?.size) chunks.push(event.data);
+          },
+          error: () =>
+            this.#warn(
+              'El navegador interrumpió el audio separado. El video sigue disponible con el audio que pudo grabarse.',
+            ),
+          stop: (event) => {
+            const blob = recordedBlob(event.target, chunks);
+            chunks.length = 0;
+            if (!blob.size)
+              this.#warn(
+                'No se pudo guardar el audio separado. Descarga el video.',
+              );
+            finish(
+              blob.size
+                ? { blob, extension: extensionForMime(blob.type) }
+                : null,
+            );
+          },
+        },
+      );
+    } catch {
+      this.#audioRecorder = null;
+      warnings.push(
+        'No se pudo iniciar el audio separado. El video conservará su pista de audio.',
+      );
+      finish(null);
+    }
+    return stopped;
   }
 
   async #stabilizeVideo(displayTrack, dimensions) {
@@ -219,9 +300,12 @@ export class ScreenRecorder extends EventTarget {
       });
       this.#outputTrack = new MediaStreamTrackGenerator({ kind: 'video' });
       this.#outputTrack.contentHint = 'detail';
-      const worker = new Worker(new URL('./capture-worker.js', import.meta.url), {
-        type: 'module',
-      });
+      const worker = new Worker(
+        new URL('./capture-worker.js?v=native-1', import.meta.url),
+        {
+          type: 'module',
+        },
+      );
       this.#worker = worker;
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
@@ -238,7 +322,8 @@ export class ScreenRecorder extends EventTarget {
           if (data.type === 'ready') finish();
           else if (data.type === 'error') finish(new Error(data.message));
         };
-        const onError = () => finish(new Error('No se pudo iniciar el ajuste de video.'));
+        const onError = () =>
+          finish(new Error('No se pudo iniciar el ajuste de video.'));
         worker.addEventListener('message', onMessage);
         worker.addEventListener('error', onError);
         worker.postMessage(
@@ -286,19 +371,28 @@ export class ScreenRecorder extends EventTarget {
     const destination = this.#audioContext.createMediaStreamDestination();
     // Two full-scale sources sum below 1.0, leaving headroom for the mix.
     for (const tracks of [displayAudio, micAudio]) {
-      const source = this.#audioContext.createMediaStreamSource(new MediaStream(tracks));
+      const source = this.#audioContext.createMediaStreamSource(
+        new MediaStream(tracks),
+      );
       const gain = this.#audioContext.createGain();
       gain.gain.value = 0.45;
       source.connect(gain).connect(destination);
     }
-    return new MediaStream([videoTrack, ...destination.stream.getAudioTracks()]);
+    return new MediaStream([
+      videoTrack,
+      ...destination.stream.getAudioTracks(),
+    ]);
   }
 
   #cleanupTracks() {
     this.#worker?.terminate();
     this.#processorTrack?.stop();
     this.#outputTrack?.stop();
-    for (const stream of [this.#displayStream, this.#microphoneStream, this.#mixedStream])
+    for (const stream of [
+      this.#displayStream,
+      this.#microphoneStream,
+      this.#mixedStream,
+    ])
       stream?.getTracks().forEach((track) => track.stop());
     this.#audioContext?.close().catch(() => undefined);
     this.#worker = null;
@@ -308,5 +402,6 @@ export class ScreenRecorder extends EventTarget {
     this.#microphoneStream = null;
     this.#mixedStream = null;
     this.#audioContext = null;
+    this.#audioRecorder = null;
   }
 }

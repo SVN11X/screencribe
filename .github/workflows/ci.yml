@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Check JavaScript and conversion planning
+      - name: Check JavaScript and native format selection
         run: |
-          find src assets/vendor/ffmpeg assets/vendor/ffmpeg-core -name '*.js' -print0 | xargs -0 -n1 node --check
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
           node --test tests/*.test.mjs
       - name: Install browser test tools
         run: |
@@ -30,9 +30,11 @@ jobs:
           sudo apt-get install -y ffmpeg
           npm install --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
-      - name: Verify real capture and browser MP4 MP3 conversion
+      - name: Verify native capture, direct downloads and absence of dependency requests
         env:
           SCREENCRIBE_PYTHON: python
         run: node tests/browser.test.cjs
-      - name: Check required static files
-        run: test -f index.html && test -f src/capture-worker.js && test -f assets/vendor/ffmpeg/worker.js && test -f assets/vendor/ffmpeg-core/ffmpeg-core.wasm && test -f assets/vendor/ffmpeg-core/manifest.json
+      - name: Check static files and absence of conversion libraries
+        run: |
+          test -f index.html && test -f src/capture-worker.js && test -f src/recording-formats.js
+          test ! -d assets/vendor && test ! -f src/local-converter.js

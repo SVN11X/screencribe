@@ -1,4 +1,4 @@
-import { containRect } from './video-layout.js';
+import { containRect } from './video-layout.js?v=native-1';
 
 // Driven by captured frames, never requestAnimationFrame or background timers.
 self.addEventListener('message', async ({ data }) => {

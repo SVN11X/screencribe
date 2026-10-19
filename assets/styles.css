@@ -1550,3 +1550,33 @@ footer > a:last-child {
     transition: none !important;
   }
 }
+
+/* Direct downloads use the format actually emitted by the browser. */
+.native-download-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.native-download-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+.native-download-card > .button {
+  align-self: flex-start;
+}
+.native-limit {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+#nativeFormatHint {
+  margin: 16px 0 0;
+  line-height: 1.6;
+}
